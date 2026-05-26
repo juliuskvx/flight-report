@@ -24,4 +24,29 @@ jobs:
           python-version: '3.11'
 
       - name: Install Node dependencies
-        run: npm
+        run: npm install --no-package-lock
+
+      - name: Install Python dependencies
+        run: pip install matplotlib
+
+      - name: Generate charts
+        run: python3 scripts/gen_charts.py
+
+      - name: Generate PPTX
+        run: node scripts/gen_pptx.js
+
+      - name: Set report date
+        run: echo "REPORT_DATE=$(date +%Y-%m-%d)" >> $GITHUB_ENV
+
+      - name: Send email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          username: ${{ secrets.GMAIL_USER }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: "✈️ European Airlines Daily Report – ${{ env.REPORT_DATE }}"
+          body: "Good morning! Your European Airlines Daily Report for ${{ env.REPORT_DATE }} is attached."
+          to: ${{ secrets.GMAIL_USER }}
+          from: Flight Report Bot
+          attachments: output/*.pptx
