@@ -1,0 +1,12 @@
+{
+  "name": "european-airlines-daily-report",
+  "version": "1.0.0",
+  "description": "Generates a daily European airlines PPTX report",
+  "main": "scripts/gen_pptx.js",
+  "scripts": {
+    "generate": "python3 scripts/gen_charts.py && node scripts/gen_pptx.js"
+  },
+  "dependencies": {
+    "pptxgenjs": "^3.12.0"
+  }
+}
