@@ -1,7 +1,8 @@
 const PptxGenJS = require("pptxgenjs");
 const fs = require("fs");
 
-const today = new Date().toISOString().slice(0,10);
+const d = new Date(); d.setDate(d.getDate() - 1);
+const today = d.toISOString().slice(0,10);
 
 // Write date to env file for GitHub Actions to pick up
 fs.appendFileSync(process.env.GITHUB_ENV || '/dev/null', `REPORT_DATE=${today}\n`);
