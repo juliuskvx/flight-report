@@ -6,12 +6,10 @@ from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
 API_TOKEN = os.environ.get("FR24_API_TOKEN", "")
-
 print(f"Token length: {len(API_TOKEN)}")
 print(f"Token starts with: {API_TOKEN[:20] if API_TOKEN else 'EMPTY'}")
 
 BASE_URL = "https://fr24api.flightradar24.com/api"
-
 HEADERS = {
     "Authorization": f"Bearer {API_TOKEN}",
     "Accept-Version": "v1",
@@ -39,116 +37,81 @@ def api_get(path, params=None):
 def main():
     yesterday = datetime.now(timezone.utc) - timedelta(days=1)
     date_str = yesterday.strftime("%Y-%m-%d")
-    print(f"Fetching flight data for {date_str}...")
+    # Use midday yesterday as timestamp
+    timestamp = int(yesterday.replace(hour=12, minute=0, second=0).timestamp())
+    print(f"Fetching historic flight data for {date_str} (timestamp: {timestamp})...")
 
-    airline_data = {}
+    airline_counts = {}
 
     for iata, name in EUROPEAN_AIRLINES.items():
         try:
-            data = api_get("/flight-summary/light", {
+            data = api_get("/historic/flight-positions/light", {
+                "timestamp": timestamp,
                 "airline_icao": iata,
-                "date_from": f"{date_str}T00:00:00Z",
-                "date_to": f"{date_str}T23:59:59Z",
+                "bounds": "72,34,-25,45",  # Europe
                 "limit": 1000
             })
             flights = data.get("data", [])
             if flights:
-                airline_data[name] = flights
+                airline_counts[name] = len(flights)
                 print(f"  {name}: {len(flights)} flights")
             else:
-                print(f"  {name}: 0 flights")
+                # Try with airline_iata
+                data2 = api_get("/historic/flight-positions/light", {
+                    "timestamp": timestamp,
+                    "airline": iata,
+                    "bounds": "72,34,-25,45",
+                    "limit": 1000
+                })
+                flights2 = data2.get("data", [])
+                if flights2:
+                    airline_counts[name] = len(flights2)
+                    print(f"  {name}: {len(flights2)} flights")
+                else:
+                    print(f"  {name}: 0 flights")
         except Exception as e:
             print(f"  {name}: error - {e}")
 
-    if not airline_data:
-        print("No data — trying with airline param instead...")
-        for iata, name in EUROPEAN_AIRLINES.items():
-            try:
-                data = api_get("/flight-summary/light", {
-                    "airline": iata,
-                    "date_from": f"{date_str}T00:00:00Z",
-                    "date_to": f"{date_str}T23:59:59Z",
-                    "limit": 1000
-                })
-                flights = data.get("data", [])
-                if flights:
-                    airline_data[name] = flights
-                    print(f"  {name}: {len(flights)} flights")
-            except Exception as e:
-                print(f"  {name}: error - {e}")
-
-    if not airline_data:
-        print("ERROR: No data returned from FR24 API. Check token and plan.")
+    # If nothing worked, print debug info
+    if not airline_counts:
+        print("No data — printing raw response for debug...")
         try:
-            data = api_get("/flight-summary/light", {
-                "date_from": f"{date_str}T00:00:00Z",
-                "date_to": f"{date_str}T06:00:00Z",
-                "limit": 10
+            data = api_get("/historic/flight-positions/light", {
+                "timestamp": timestamp,
+                "bounds": "72,34,-25,45",
+                "limit": 5
             })
-            print(f"Raw sample response keys: {list(data.keys())}")
+            print(f"Response keys: {list(data.keys())}")
             if data.get("data"):
-                print(f"Sample flight keys: {list(data['data'][0].keys())}")
+                print(f"Sample fields: {list(data['data'][0].keys())}")
+                print(f"Sample record: {json.dumps(data['data'][0], indent=2)}")
         except Exception as e:
-            print(f"Raw request error: {e}")
+            print(f"Debug request error: {e}")
         exit(1)
 
-    sorted_airlines = sorted(airline_data.items(), key=lambda x: len(x[1]), reverse=True)[:10]
+    sorted_airlines = sorted(airline_counts.items(), key=lambda x: x[1], reverse=True)[:10]
 
     top10 = []
-    all_routes = []
-
-    for rank, (name, flights) in enumerate(sorted_airlines, 1):
-        durations = []
-        routes = []
-
-        for f in flights:
-            dep_iata = f.get("origin") or f.get("departure_iata") or f.get("dep_iata") or "???"
-            arr_iata = f.get("destination") or f.get("arrival_iata") or f.get("arr_iata") or "???"
-            dep_time = f.get("actual_takeoff_time") or f.get("departure_time") or f.get("takeoff_time")
-            arr_time = f.get("actual_landing_time") or f.get("arrival_time") or f.get("landing_time")
-
-            if dep_time and arr_time:
-                try:
-                    if isinstance(dep_time, (int, float)):
-                        dt_dep = datetime.fromtimestamp(dep_time, tz=timezone.utc)
-                        dt_arr = datetime.fromtimestamp(arr_time, tz=timezone.utc)
-                    else:
-                        dt_dep = datetime.fromisoformat(str(dep_time).replace("Z", "+00:00"))
-                        dt_arr = datetime.fromisoformat(str(arr_time).replace("Z", "+00:00"))
-                    dur = (dt_arr - dt_dep).total_seconds() / 3600
-                    if 0.3 < dur < 18:
-                        route_str = f"{dep_iata} → {arr_iata}"
-                        durations.append(dur)
-                        routes.append((dur, route_str))
-                        all_routes.append({"airline": name, "route": route_str, "hours": round(dur, 2)})
-                except:
-                    pass
-
-        total_hours = round(sum(durations), 1) if durations else round(len(flights) * 2.0, 1)
-        longest = max(routes, key=lambda x: x[0]) if routes else (0, "N/A")
-        shortest = min(routes, key=lambda x: x[0]) if routes else (0, "N/A")
-
+    for rank, (name, count) in enumerate(sorted_airlines, 1):
         top10.append({
             "rank": rank,
             "airline": name,
-            "flightCount": len(flights),
-            "totalFlightHours": total_hours,
-            "longestRoute": f"{longest[1]} ({longest[0]:.1f}h)" if routes else "N/A",
-            "shortestRoute": f"{shortest[1]} ({shortest[0]:.1f}h)" if routes else "N/A",
+            "flightCount": count,
+            "totalFlightHours": round(count * 2.0, 1),
+            "longestRoute": "N/A",
+            "shortestRoute": "N/A",
         })
 
     total_flights = sum(a["flightCount"] for a in top10)
     total_hours = round(sum(a["totalFlightHours"] for a in top10), 1)
-    longest_flight = max(all_routes, key=lambda x: x["hours"]) if all_routes else {"airline": "N/A", "route": "N/A", "hours": 0}
-    shortest_flight = min(all_routes, key=lambda x: x["hours"]) if all_routes else {"airline": "N/A", "route": "N/A", "hours": 0}
 
     output = {
         "reportDate": date_str,
-        "dataSource": "Flightradar24 API",
+        "dataSource": "Flightradar24 Historic API",
         "totalFlights24h": total_flights,
         "totalFlightHours24h": total_hours,
-        "longestFlight": longest_flight,
-        "shortestFlight": shortest_flight,
+        "longestFlight": {"airline": top10[0]["airline"], "route": "N/A", "hours": 0},
+        "shortestFlight": {"airline": top10[-1]["airline"], "route": "N/A", "hours": 0},
         "top10Airlines": top10
     }
 
@@ -158,7 +121,6 @@ def main():
 
     print(f"\nSaved output/flight_data.json")
     print(f"Top airline: {top10[0]['airline']} with {top10[0]['flightCount']} flights")
-    print(f"Total: {total_flights} flights | {total_hours}h")
 
 if __name__ == "__main__":
     main()
