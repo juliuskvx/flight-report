@@ -1,117 +1,238 @@
 const PptxGenJS = require("pptxgenjs");
 const fs = require("fs");
 
-// Load real data from fetch_data.py output
 const fd = JSON.parse(fs.readFileSync('output/flight_data.json', 'utf8'));
 const today = fd.reportDate;
+const dayName = new Date(today).toLocaleDateString('en-GB', {weekday:'long',year:'numeric',month:'long',day:'numeric',timeZone:'UTC'});
 
-// Write date to env file for GitHub Actions
 fs.appendFileSync(process.env.GITHUB_ENV || '/dev/null', `REPORT_DATE=${today}\n`);
 
 const pptx = new PptxGenJS();
 pptx.layout = 'LAYOUT_16x9';
-pptx.title = 'European Airlines Daily Report ' + today;
+pptx.title = 'European Airlines Intelligence Report ' + today;
 
-const navy='0A1628', blue='1B4F8A', accent='1E90D4', lBlue='D6EAFF',
-      white='FFFFFF', offW='F4F7FA', gray='64748B', lgray='E2E8F0', text='1E293B';
+// ── Palette ──────────────────────────────────────────────────────────────────
+const C = {
+  navy:   '0D1F3C',  // dominant dark
+  blue:   '1B3F6E',  // secondary
+  mid:    '2474B5',  // mid blue
+  accent: 'C9A84C',  // gold accent (#1 highlight)
+  white:  'FFFFFF',
+  offW:   'F8FAFC',
+  slate:  '64748B',
+  lgray:  'E2E8F0',
+  text:   '1E293B',
+  ice:    'D6E8FA',
+};
 
-// Slide 1: Title
+const serif = 'Cambria';   // headers — personality
+const sans  = 'Calibri';   // body — safe, reliable
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function header(slide, title, sub) {
+  slide.addShape(pptx.shapes.RECTANGLE, {x:0, y:0, w:10, h:0.8, fill:{color:C.navy}});
+  slide.addText(title, {x:0.4, y:0.05, w:7, h:0.7, fontSize:22, bold:true, color:C.white, fontFace:serif, valign:'middle'});
+  if (sub) slide.addText(sub, {x:7.2, y:0.05, w:2.6, h:0.7, fontSize:11, color:C.ice, fontFace:sans, valign:'middle', align:'right'});
+  slide.addText('OpenSky Network · EuroAir Intel', {x:0, y:5.35, w:10, h:0.28, fontSize:9, color:C.slate, fontFace:sans, align:'center'});
+}
+
+function card(slide, x, y, w, h, col) {
+  slide.addShape(pptx.shapes.RECTANGLE, {x, y, w, h, fill:{color:col||C.white}, shadow:{type:'outer', blur:4, offset:2, angle:45, color:'CBD5E1', opacity:0.3}});
+}
+
+// ── SLIDE 1: Title ────────────────────────────────────────────────────────────
 const s1 = pptx.addSlide();
-s1.background = {color:navy};
-s1.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:0.4,h:5.625,fill:{color:accent}});
-s1.addShape(pptx.shapes.RECTANGLE,{x:0,y:4.8,w:10,h:0.825,fill:{color:blue}});
-s1.addText('European Airlines',{x:0.6,y:1.1,w:9,h:0.9,fontSize:40,bold:true,color:white,fontFace:'Calibri'});
-s1.addText('Daily Flight Report',{x:0.6,y:2.05,w:9,h:0.7,fontSize:30,color:lBlue,fontFace:'Calibri'});
-s1.addText('Top 10 Airlines  Â·  Live Operations  Â·  '+today,{x:0.6,y:2.9,w:9,h:0.45,fontSize:15,color:gray,fontFace:'Calibri'});
-s1.addText('SOURCE: AVIATIONSTACK LIVE API  Â·  GENERATED 10:00 UTC',{x:0.6,y:4.92,w:8,h:0.35,fontSize:11,color:lBlue,fontFace:'Calibri',charSpacing:3});
+s1.background = {color:C.navy};
 
-// Slide 2: Key Metrics
+// Big diagonal accent block
+s1.addShape(pptx.shapes.RECTANGLE, {x:6.2, y:0, w:3.8, h:5.625, fill:{color:C.blue}});
+s1.addShape(pptx.shapes.RECTANGLE, {x:7.0, y:0, w:3.0, h:5.625, fill:{color:C.mid}});
+
+// Gold top bar
+s1.addShape(pptx.shapes.RECTANGLE, {x:0, y:0, w:6.5, h:0.06, fill:{color:C.accent}});
+
+// Title text
+s1.addText('EuroAir', {x:0.55, y:0.8, w:6, h:1.1, fontSize:58, bold:true, color:C.white, fontFace:serif});
+s1.addText('Intel', {x:0.55, y:1.85, w:6, h:1.0, fontSize:58, bold:true, color:C.accent, fontFace:serif});
+s1.addText('Daily Flight Intelligence Report', {x:0.55, y:3.0, w:5.8, h:0.5, fontSize:16, color:C.ice, fontFace:sans});
+s1.addText(dayName, {x:0.55, y:3.6, w:5.8, h:0.4, fontSize:13, color:C.slate, fontFace:sans});
+
+// Right side label
+s1.addText('TOP 10\nEUROPEAN\nAIRLINES', {x:7.1, y:1.6, w:2.6, h:2.0, fontSize:20, bold:true, color:C.white, fontFace:serif, align:'center', lineSpacingMultiple:1.4});
+
+// Bottom bar
+s1.addShape(pptx.shapes.RECTANGLE, {x:0, y:5.15, w:10, h:0.475, fill:{color:C.blue}});
+s1.addText('SOURCE: OPENSKY NETWORK ADS-B · GENERATED DAILY AT 10:00 VILNIUS TIME', {x:0.4, y:5.2, w:9, h:0.35, fontSize:10, color:C.ice, fontFace:sans, charSpacing:2});
+
+// ── SLIDE 2: Key Metrics ──────────────────────────────────────────────────────
 const s2 = pptx.addSlide();
-s2.background = {color:offW};
-s2.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:10,h:0.75,fill:{color:navy}});
-s2.addText('Key Metrics â€” Live European Airspace',{x:0.3,y:0.1,w:9,h:0.55,fontSize:18,bold:true,color:white,fontFace:'Calibri',valign:'middle'});
-const metrics=[
-  {label:'Active flights tracked', value:Number(fd.totalFlights24h).toLocaleString(), col:blue},
-  {label:'Total flight hours',     value:Number(fd.totalFlightHours24h).toLocaleString()+'h', col:accent},
-  {label:'Airlines tracked',       value:''+fd.top10Airlines.length, col:'F59E0B'},
-  {label:'Report date',            value:today, col:'10B981'}
+s2.background = {color:C.offW};
+header(s2, 'Key Metrics — European Airspace Snapshot', today);
+
+const metrics = [
+  {label:'Flights Tracked',    value: Number(fd.totalFlights24h).toLocaleString(),          unit:'flights',  col:C.blue},
+  {label:'Total Block Hours',  value: Number(fd.totalFlightHours24h).toLocaleString(),       unit:'hours',    col:C.mid},
+  {label:'Airlines Ranked',   value: String(fd.top10Airlines.length),                       unit:'carriers', col:C.accent},
+  {label:'#1 Airline',        value: fd.top10Airlines[0].airline,                           unit:'by volume',col:C.navy},
 ];
-metrics.forEach((m,i)=>{
-  const x=0.3+(i%2)*4.85, y=1.0+Math.floor(i/2)*1.7;
-  s2.addShape(pptx.shapes.RECTANGLE,{x,y,w:4.5,h:1.4,fill:{color:white}});
-  s2.addShape(pptx.shapes.RECTANGLE,{x,y,w:0.08,h:1.4,fill:{color:m.col}});
-  s2.addText(m.label,{x:x+0.2,y:y+0.1,w:4.1,h:0.35,fontSize:12,color:gray,fontFace:'Calibri'});
-  s2.addText(m.value,{x:x+0.2,y:y+0.5,w:4.1,h:0.7,fontSize:26,bold:true,color:navy,fontFace:'Calibri'});
+
+metrics.forEach((m, i) => {
+  const x = 0.3 + (i % 2) * 4.85;
+  const y = 1.0 + Math.floor(i / 2) * 1.85;
+  card(s2, x, y, 4.5, 1.55);
+  s2.addShape(pptx.shapes.RECTANGLE, {x, y, w:4.5, h:0.06, fill:{color:m.col}});
+  s2.addText(m.label, {x:x+0.2, y:y+0.2, w:4.1, h:0.3, fontSize:11, color:C.slate, fontFace:sans});
+  s2.addText(m.value, {x:x+0.2, y:y+0.55, w:4.1, h:0.7, fontSize:m.value.length > 10 ? 18 : 28, bold:true, color:C.text, fontFace:serif});
+  s2.addText(m.unit, {x:x+0.2, y:y+1.25, w:4.1, h:0.25, fontSize:10, color:C.slate, fontFace:sans});
 });
-s2.addShape(pptx.shapes.RECTANGLE,{x:0.3,y:4.3,w:9.4,h:0.9,fill:{color:lBlue}});
+
+// Route highlight box
+s2.addShape(pptx.shapes.RECTANGLE, {x:0.3, y:4.55, w:9.4, h:0.65, fill:{color:C.navy}});
 s2.addText(
-  'Longest: '+fd.longestFlight.airline+' Â· '+fd.longestFlight.route+' ('+fd.longestFlight.hours+'h)   |   '+
-  'Shortest: '+fd.shortestFlight.airline+' Â· '+fd.shortestFlight.route+' ('+fd.shortestFlight.hours+'h)',
-  {x:0.5,y:4.35,w:9,h:0.8,fontSize:11,color:blue,fontFace:'Calibri',valign:'middle'});
+  `✈  Longest: ${fd.longestFlight.airline}  ${fd.longestFlight.route}  (${fd.longestFlight.hours}h)        ✈  Shortest: ${fd.shortestFlight.airline}  ${fd.shortestFlight.route}  (${fd.shortestFlight.hours}h)`,
+  {x:0.5, y:4.58, w:9.0, h:0.58, fontSize:11, color:C.ice, fontFace:sans, valign:'middle', align:'center'}
+);
 
-// Slide 3: Flight count chart
+// ── SLIDE 3: Flight Count Bar Chart ──────────────────────────────────────────
 const s3 = pptx.addSlide();
-s3.background = {color:white};
-s3.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:10,h:0.75,fill:{color:navy}});
-s3.addText('Top 10 Airlines by Active Flight Count',{x:0.3,y:0.1,w:9,h:0.55,fontSize:18,bold:true,color:white,fontFace:'Calibri',valign:'middle'});
-s3.addImage({path:'output/chart_flights.png', x:0.2, y:0.85, w:9.6, h:4.65});
+s3.background = {color:C.white};
+header(s3, 'Top 10 Airlines by Flight Count', today);
+s3.addImage({path:'output/chart_flights.png', x:0.2, y:0.88, w:9.6, h:4.42});
 
-// Slide 4: Full data table
+// ── SLIDE 4: Market Share Pie ─────────────────────────────────────────────────
 const s4 = pptx.addSlide();
-s4.background = {color:white};
-s4.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:10,h:0.75,fill:{color:navy}});
-s4.addText('Full Airline Breakdown',{x:0.3,y:0.1,w:9,h:0.55,fontSize:18,bold:true,color:white,fontFace:'Calibri',valign:'middle'});
-const tRows=[
-  ['#','Airline','Flights','Hours','Longest Route','Shortest Route']
-    .map(h=>({text:h,options:{bold:true,color:white,fill:{color:navy},fontSize:10}})),
-  ...fd.top10Airlines.map((a,i)=>[
-    String(a.rank), a.airline,
-    Number(a.flightCount).toLocaleString(),
-    Number(a.totalFlightHours).toLocaleString()+'h',
-    a.longestRoute, a.shortestRoute
-  ].map(v=>({text:v,options:{color:text,fill:{color:i%2===0?white:offW},fontSize:9}})))
-];
-s4.addTable(tRows,{x:0.2,y:0.85,w:9.6,h:4.5,border:{pt:0.5,color:lgray},colW:[0.45,1.5,0.85,0.75,3.05,2.95]});
+s4.background = {color:C.offW};
+header(s4, 'Market Share — Flight Volume Distribution', today);
 
-// Slide 5: Flight hours chart
+s4.addImage({path:'output/chart_pie.png', x:0.1, y:0.88, w:5.5, h:4.42});
+
+// Right side: top 5 ranked list
+s4.addText('Rankings', {x:5.9, y:1.0, w:3.8, h:0.5, fontSize:16, bold:true, color:C.navy, fontFace:serif});
+fd.top10Airlines.slice(0,5).forEach((a, i) => {
+  const y = 1.6 + i * 0.72;
+  const isFirst = i === 0;
+  card(s4, 5.9, y, 3.8, 0.62, isFirst ? C.navy : C.white);
+  s4.addText(`${a.rank}`, {x:6.0, y:y+0.08, w:0.4, h:0.45, fontSize:16, bold:true, color: isFirst ? C.accent : C.mid, fontFace:serif, align:'center'});
+  s4.addText(a.airline, {x:6.45, y:y+0.08, w:2.4, h:0.25, fontSize:11, bold:true, color: isFirst ? C.white : C.text, fontFace:sans});
+  s4.addText(`${Number(a.flightCount).toLocaleString()} flights`, {x:6.45, y:y+0.33, w:2.4, h:0.22, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans});
+});
+
+// ── SLIDE 5: Block Hours Chart ────────────────────────────────────────────────
 const s5 = pptx.addSlide();
-s5.background = {color:white};
-s5.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:10,h:0.75,fill:{color:navy}});
-s5.addText('Total Flight Hours by Airline',{x:0.3,y:0.1,w:9,h:0.55,fontSize:18,bold:true,color:white,fontFace:'Calibri',valign:'middle'});
-s5.addImage({path:'output/chart_hours.png', x:0.2, y:0.85, w:9.6, h:4.65});
+s5.background = {color:C.white};
+header(s5, 'Total Block Hours by Airline', today);
+s5.addImage({path:'output/chart_hours.png', x:0.2, y:0.88, w:9.6, h:4.42});
 
-// Slide 6: Route Spotlight
+// ── SLIDE 6: Full Data Table ──────────────────────────────────────────────────
 const s6 = pptx.addSlide();
-s6.background = {color:navy};
-s6.addShape(pptx.shapes.RECTANGLE,{x:0,y:0,w:10,h:0.75,fill:{color:blue}});
-s6.addText('Route Spotlight â€” Longest & Shortest',{x:0.3,y:0.1,w:9,h:0.55,fontSize:18,bold:true,color:white,fontFace:'Calibri',valign:'middle'});
-s6.addShape(pptx.shapes.RECTANGLE,{x:0.3,y:0.9,w:9.4,h:2.1,fill:{color:blue}});
-s6.addText('LONGEST FLIGHT',{x:0.5,y:1.0,w:8.8,h:0.4,fontSize:11,color:lBlue,fontFace:'Calibri',charSpacing:2});
-s6.addText(fd.longestFlight.airline,{x:0.5,y:1.45,w:8.8,h:0.55,fontSize:26,bold:true,color:white,fontFace:'Calibri'});
-s6.addText(fd.longestFlight.route+' Â· '+fd.longestFlight.hours+' hours',{x:0.5,y:2.05,w:8.8,h:0.4,fontSize:14,color:lBlue,fontFace:'Calibri'});
-s6.addShape(pptx.shapes.RECTANGLE,{x:0.3,y:3.15,w:9.4,h:2.1,fill:{color:accent}});
-s6.addText('SHORTEST FLIGHT',{x:0.5,y:3.25,w:8.8,h:0.4,fontSize:11,color:white,fontFace:'Calibri',charSpacing:2});
-s6.addText(fd.shortestFlight.airline,{x:0.5,y:3.7,w:8.8,h:0.55,fontSize:26,bold:true,color:white,fontFace:'Calibri'});
-s6.addText(fd.shortestFlight.route+' Â· '+fd.shortestFlight.hours+' hours',{x:0.5,y:4.3,w:8.8,h:0.4,fontSize:14,color:white,fontFace:'Calibri'});
+s6.background = {color:C.white};
+header(s6, 'Full Airline Intelligence Breakdown', today);
 
-// Slide 7: Summary
+const hOpts = {bold:true, color:C.white, fill:{color:C.navy}, fontSize:10, fontFace:sans, align:'center'};
+const tRows = [
+  ['#','Airline','Flights','Block Hrs','Longest Route','Shortest Route'].map(h=>({text:h, options:hOpts})),
+  ...fd.top10Airlines.map((a, i) => {
+    const isFirst = i === 0;
+    const bg = isFirst ? 'FFF8E7' : (i % 2 === 0 ? C.white : C.offW);
+    return [
+      String(a.rank), a.airline,
+      Number(a.flightCount).toLocaleString(),
+      Number(a.totalFlightHours).toLocaleString()+'h',
+      a.longestRoute, a.shortestRoute
+    ].map((v, ci) => ({
+      text: v,
+      options: {
+        color: isFirst && ci===0 ? C.accent : C.text,
+        fill: {color: bg},
+        fontSize: 9.5,
+        fontFace: sans,
+        bold: isFirst,
+        align: ci >= 2 && ci <= 3 ? 'center' : 'left'
+      }
+    }));
+  })
+];
+
+s6.addTable(tRows, {
+  x:0.2, y:0.88, w:9.6, h:4.42,
+  border:{pt:0.5, color:C.lgray},
+  colW:[0.4, 1.7, 0.85, 0.85, 3.0, 2.8]
+});
+
+// ── SLIDE 7: Route Spotlight ──────────────────────────────────────────────────
 const s7 = pptx.addSlide();
-s7.background = {color:navy};
-s7.addShape(pptx.shapes.RECTANGLE,{x:0,y:2.4,w:10,h:0.05,fill:{color:accent}});
-s7.addText('Summary',{x:0.6,y:0.7,w:9,h:0.8,fontSize:34,bold:true,color:white,fontFace:'Calibri'});
-s7.addText([
-  {text:'Report date: ',options:{bold:true,color:lBlue}},{text:today+'\n',options:{color:white}},
-  {text:'Active flights: ',options:{bold:true,color:lBlue}},{text:Number(fd.totalFlights24h).toLocaleString()+'\n',options:{color:white}},
-  {text:'Total hours: ',options:{bold:true,color:lBlue}},{text:Number(fd.totalFlightHours24h).toLocaleString()+'h\n',options:{color:white}},
-  {text:'#1 airline: ',options:{bold:true,color:lBlue}},{text:fd.top10Airlines[0].airline+' ('+Number(fd.top10Airlines[0].flightCount).toLocaleString()+' flights)\n',options:{color:white}},
-  {text:'Longest: ',options:{bold:true,color:lBlue}},{text:fd.longestFlight.route+' ('+fd.longestFlight.hours+'h)\n',options:{color:white}},
-  {text:'Shortest: ',options:{bold:true,color:lBlue}},{text:fd.shortestFlight.route+' ('+fd.shortestFlight.hours+'h)',options:{color:white}}
-],{x:0.6,y:2.65,w:8.8,h:2.7,fontSize:14,fontFace:'Calibri',lineSpacingMultiple:1.6});
-s7.addText('Data sourced from AviationStack Live API Â· Generated daily at 10:00 UTC',
-  {x:0.6,y:5.2,w:8.8,h:0.35,fontSize:11,color:gray,fontFace:'Calibri'});
+s7.background = {color:C.navy};
+header(s7, 'Route Spotlight', today);
 
-fs.mkdirSync('output', { recursive: true });
+// Longest
+card(s7, 0.3, 0.95, 9.4, 2.05, C.blue);
+s7.addText('LONGEST ROUTE OF THE DAY', {x:0.55, y:1.05, w:8.8, h:0.35, fontSize:10, color:C.accent, fontFace:sans, charSpacing:2, bold:true});
+s7.addText(fd.longestFlight.route, {x:0.55, y:1.42, w:8.8, h:0.75, fontSize:34, bold:true, color:C.white, fontFace:serif});
+s7.addText(`${fd.longestFlight.airline}   ·   ${fd.longestFlight.hours} hours in the air`, {x:0.55, y:2.18, w:8.8, h:0.35, fontSize:13, color:C.ice, fontFace:sans});
+
+// Shortest
+card(s7, 0.3, 3.2, 9.4, 2.05, C.mid);
+s7.addText('SHORTEST ROUTE OF THE DAY', {x:0.55, y:3.3, w:8.8, h:0.35, fontSize:10, color:C.navy, fontFace:sans, charSpacing:2, bold:true});
+s7.addText(fd.shortestFlight.route, {x:0.55, y:3.67, w:8.8, h:0.75, fontSize:34, bold:true, color:C.white, fontFace:serif});
+s7.addText(`${fd.shortestFlight.airline}   ·   ${fd.shortestFlight.hours} hours in the air`, {x:0.55, y:4.43, w:8.8, h:0.35, fontSize:13, color:C.white, fontFace:sans});
+
+// ── SLIDE 8: Airline Profiles (top 5 cards) ───────────────────────────────────
+const s8 = pptx.addSlide();
+s8.background = {color:C.offW};
+header(s8, 'Top 5 Airline Profiles', today);
+
+fd.top10Airlines.slice(0,5).forEach((a, i) => {
+  const x = 0.2 + (i % 5) * 1.94;
+  const isFirst = i === 0;
+  card(s8, x, 0.95, 1.82, 4.3, isFirst ? C.navy : C.white);
+  // Rank badge
+  s8.addShape(pptx.shapes.RECTANGLE, {x:x+0.65, y:1.05, w:0.52, h:0.52, fill:{color: isFirst ? C.accent : C.mid}});
+  s8.addText(`#${a.rank}`, {x:x+0.65, y:1.05, w:0.52, h:0.52, fontSize:16, bold:true, color:C.white, fontFace:serif, align:'center', valign:'middle'});
+  // Airline name
+  s8.addText(a.airline, {x:x+0.08, y:1.68, w:1.66, h:0.55, fontSize:11, bold:true, color: isFirst ? C.white : C.navy, fontFace:serif, align:'center', wrap:true});
+  // Stats
+  s8.addText('Flights', {x:x+0.08, y:2.35, w:1.66, h:0.25, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
+  s8.addText(Number(a.flightCount).toLocaleString(), {x:x+0.08, y:2.6, w:1.66, h:0.45, fontSize:22, bold:true, color: isFirst ? C.accent : C.mid, fontFace:serif, align:'center'});
+  s8.addText('Block Hours', {x:x+0.08, y:3.1, w:1.66, h:0.25, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
+  s8.addText(Number(a.totalFlightHours).toLocaleString()+'h', {x:x+0.08, y:3.35, w:1.66, h:0.4, fontSize:17, bold:true, color: isFirst ? C.white : C.text, fontFace:serif, align:'center'});
+  s8.addText(a.longestRoute, {x:x+0.08, y:3.85, w:1.66, h:0.3, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
+  s8.addText('top route', {x:x+0.08, y:4.15, w:1.66, h:0.22, fontSize:8, color: isFirst ? C.accent : C.mid, fontFace:sans, align:'center'});
+});
+
+// ── SLIDE 9: Summary / Back Cover ────────────────────────────────────────────
+const s9 = pptx.addSlide();
+s9.background = {color:C.navy};
+
+s9.addShape(pptx.shapes.RECTANGLE, {x:0, y:0, w:4, h:5.625, fill:{color:C.blue}});
+s9.addShape(pptx.shapes.RECTANGLE, {x:0, y:0, w:0.08, h:5.625, fill:{color:C.accent}});
+
+s9.addText('Summary', {x:0.25, y:0.6, w:3.5, h:0.7, fontSize:28, bold:true, color:C.white, fontFace:serif});
+s9.addText(dayName, {x:0.25, y:1.35, w:3.5, h:0.35, fontSize:10, color:C.ice, fontFace:sans});
+
+const summaryItems = [
+  ['Flights tracked', Number(fd.totalFlights24h).toLocaleString()],
+  ['Total block hours', Number(fd.totalFlightHours24h).toLocaleString()+'h'],
+  ['#1 airline', fd.top10Airlines[0].airline],
+  ['#1 flights', Number(fd.top10Airlines[0].flightCount).toLocaleString()],
+  ['Longest route', fd.longestFlight.route+' ('+fd.longestFlight.hours+'h)'],
+  ['Shortest route', fd.shortestFlight.route+' ('+fd.shortestFlight.hours+'h)'],
+];
+
+summaryItems.forEach(([label, val], i) => {
+  const y = 1.9 + i * 0.52;
+  s9.addText(label, {x:0.3, y, w:1.7, h:0.35, fontSize:10, color:C.ice, fontFace:sans});
+  s9.addText(val, {x:2.05, y, w:1.75, h:0.35, fontSize:10, bold:true, color:C.accent, fontFace:sans});
+});
+
+// Right side — big closing statement
+s9.addText('European\nAirlines\nIntelligence', {x:4.3, y:1.2, w:5.4, h:2.4, fontSize:38, bold:true, color:C.white, fontFace:serif, lineSpacingMultiple:1.3});
+s9.addText('Daily briefing powered by OpenSky Network ADS-B data.\nCovering top European carriers by operational volume.', {x:4.3, y:3.8, w:5.4, h:0.8, fontSize:12, color:C.ice, fontFace:sans, lineSpacingMultiple:1.4});
+s9.addShape(pptx.shapes.RECTANGLE, {x:4.3, y:4.75, w:5.4, h:0.06, fill:{color:C.accent}});
+s9.addText('EuroAir Intel · Generated daily at 10:00 Vilnius Time', {x:4.3, y:4.85, w:5.4, h:0.3, fontSize:10, color:C.slate, fontFace:sans});
+
+// ── Write file ────────────────────────────────────────────────────────────────
+fs.mkdirSync('output', {recursive:true});
 const fname = `output/European_Airlines_Report_${today}.pptx`;
 pptx.writeFile({fileName: fname})
-  .then(()=> console.log('DONE: ' + fname))
+  .then(() => console.log('DONE: ' + fname))
   .catch(e => { console.error('ERROR: ' + e.message); process.exit(1); });
