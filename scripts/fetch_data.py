@@ -4,6 +4,7 @@ import urllib.request
 import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
+import time
 
 API_TOKEN = os.environ.get("FR24_API_TOKEN", "")
 print(f"Token length: {len(API_TOKEN)}")
@@ -18,14 +19,26 @@ HEADERS = {
 
 # ICAO callsign prefix -> airline name
 AIRLINE_ICAO = {
-    "RYR": "Ryanair", "EZY": "easyJet", "DLH": "Lufthansa",
-    "THY": "Turkish Airlines", "AFR": "Air France", "BAW": "British Airways",
-    "WZZ": "Wizz Air", "KLM": "KLM", "VLG": "Vueling", "SWR": "Swiss",
-    "IBE": "Iberia", "AZA": "ITA Airways", "SAS": "SAS",
-    "NAX": "Norwegian", "BEL": "Brussels Airlines", "AUA": "Austrian",
-    "EIN": "Aer Lingus", "TAP": "TAP Air Portugal", "AEE": "Aegean",
-    "BTI": "airBaltic", "PGT": "Pegasus", "TOM": "TUI", "EXS": "Jet2",
-    "CFG": "Condor", "GWI": "Germanwings", "SXS": "SunExpress",
+    "RYR": "Ryanair",
+    "EZY": "easyJet",
+    "DLH": "Lufthansa",
+    "THY": "Turkish Airlines",
+    "AFR": "Air France",
+    "BAW": "British Airways",
+    "WZZ": "Wizz Air",
+    "KLM": "KLM",
+    "VLG": "Vueling",
+    "SWR": "Swiss",
+    "IBE": "Iberia",
+    "AUA": "Austrian",
+    "EIN": "Aer Lingus",
+    "TAP": "TAP Air Portugal",
+    "SAS": "SAS",
+    "NAX": "Norwegian",
+    "BTI": "airBaltic",
+    "PGT": "Pegasus",
+    "TOM": "TUI",
+    "EXS": "Jet2",
 }
 
 def api_get(path, params=None):
@@ -36,100 +49,73 @@ def api_get(path, params=None):
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode())
 
-def get_airline_from_callsign(callsign):
-    if not callsign:
-        return None
-    prefix = callsign[:3].upper()
-    return AIRLINE_ICAO.get(prefix)
-
 def main():
     yesterday = datetime.now(timezone.utc) - timedelta(days=1)
     date_str = yesterday.strftime("%Y-%m-%d")
 
-    # Query every 2 hours across yesterday = 12 snapshots
-    # Use offset pagination to get more than 20 flights per snapshot
+    # 6 timestamps spread across the day
     timestamps = [
         int(yesterday.replace(hour=h, minute=0, second=0).timestamp())
-        for h in [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]
+        for h in [4, 8, 12, 16, 20, 23]
     ]
 
     print(f"Fetching historic flight data for {date_str}...")
+    print(f"Querying {len(AIRLINE_ICAO)} airlines across {len(timestamps)} timestamps...")
 
-    all_flights = {}  # fr24_id -> flight record
+    # For each airline, count unique flight IDs across all timestamps
+    airline_flight_ids = defaultdict(set)
+    airline_routes = defaultdict(set)
 
-    for ts in timestamps:
-        # Paginate with offsets to get more flights per timestamp
-        for offset in [0, 20, 40, 60, 80]:
+    for icao, name in AIRLINE_ICAO.items():
+        for ts in timestamps:
             try:
                 data = api_get("/historic/flight-positions/full", {
                     "timestamp": ts,
-                    "bounds": "72,34,-25,45",
-                    "limit": 20,
-                    "offset": offset
+                    "callsigns": f"{icao}*",  # wildcard match e.g. RYR*
+                    "limit": 20
                 })
                 flights = data.get("data", [])
-                if not flights:
-                    break
                 for f in flights:
                     fid = f.get("fr24_id") or f.get("hex")
-                    if fid and fid not in all_flights:
-                        all_flights[fid] = f
-                if len(flights) < 20:
-                    break
+                    if fid:
+                        airline_flight_ids[name].add(fid)
+                    dep = (f.get("orig_iata") or "").strip()
+                    arr = (f.get("dest_iata") or "").strip()
+                    if dep and arr and dep != arr:
+                        airline_routes[name].add((dep, arr))
             except Exception as e:
-                print(f"  Error ts={ts} offset={offset}: {e}")
-                break
+                pass  # skip silently, keep going
+        time.sleep(0.1)  # small delay to avoid rate limiting
 
-    print(f"Total unique flights: {len(all_flights)}")
+    print(f"\nResults:")
+    for name, ids in sorted(airline_flight_ids.items(), key=lambda x: -len(x[1])):
+        print(f"  {name}: {len(ids)} unique flights")
 
-    # Group by airline using callsign prefix
-    airline_flights = defaultdict(list)
-    unmatched_callsigns = set()
-
-    for fid, f in all_flights.items():
-        callsign = f.get("callsign") or ""
-        name = get_airline_from_callsign(callsign)
-        if name:
-            airline_flights[name].append(f)
-        else:
-            if callsign:
-                unmatched_callsigns.add(callsign[:3])
-
-    print(f"Airlines matched: {dict((k, len(v)) for k,v in sorted(airline_flights.items(), key=lambda x: -len(x[1])))}")
-    print(f"Unmatched prefixes (sample): {list(unmatched_callsigns)[:20]}")
-
-    if not airline_flights:
-        print("No airlines matched — check unmatched prefixes above")
+    if not airline_flight_ids:
+        print("ERROR: No data returned")
         exit(1)
 
-    sorted_airlines = sorted(airline_flights.items(), key=lambda x: len(x[1]), reverse=True)[:10]
+    sorted_airlines = sorted(airline_flight_ids.items(), key=lambda x: len(x[1]), reverse=True)[:10]
 
     top10 = []
     all_routes = []
 
-    for rank, (name, flights) in enumerate(sorted_airlines, 1):
-        routes = []
-        for f in flights:
-            dep = (f.get("orig_iata") or "").strip()
-            arr = (f.get("dest_iata") or "").strip()
-            if dep and arr and dep != arr:
-                routes.append((dep, arr))
-
-        total_hours = round(len(flights) * 2.0, 1)
-        unique_routes = list(set(routes))
-        longest  = f"{unique_routes[0][0]} → {unique_routes[0][1]}"  if unique_routes else "N/A"
-        shortest = f"{unique_routes[-1][0]} → {unique_routes[-1][1]}" if unique_routes else "N/A"
+    for rank, (name, flight_ids) in enumerate(sorted_airlines, 1):
+        count = len(flight_ids)
+        routes = list(airline_routes.get(name, set()))
+        total_hours = round(count * 2.0, 1)
+        longest  = f"{routes[0][0]} → {routes[0][1]}"  if routes else "N/A"
+        shortest = f"{routes[-1][0]} → {routes[-1][1]}" if routes else "N/A"
 
         top10.append({
             "rank": rank,
             "airline": name,
-            "flightCount": len(flights),
+            "flightCount": count,
             "totalFlightHours": total_hours,
             "longestRoute": longest,
             "shortestRoute": shortest,
         })
-
-        for dep, arr in unique_routes[:5]:
+        for dep, arr in routes[:5]:
             all_routes.append({"airline": name, "route": f"{dep} → {arr}", "hours": 2.0})
 
     total_flights = sum(a["flightCount"] for a in top10)
