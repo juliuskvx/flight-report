@@ -2,6 +2,8 @@ import os
 import json
 import urllib.request
 import urllib.parse
+print(f"Token length: {len(API_TOKEN)}")
+print(f"Token starts with: {API_TOKEN[:20] if API_TOKEN else 'EMPTY'}")
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
