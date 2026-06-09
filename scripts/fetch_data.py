@@ -5,7 +5,7 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
-API_TOKEN = os.environ.get("FR24_API_KEY", "")
+API_TOKEN = os.environ.get("FR24_API_TOKEN", "")
 BASE_URL = "https://fr24api.flightradar24.com/api"
 
 HEADERS = {
