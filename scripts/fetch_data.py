@@ -2,7 +2,6 @@ import os
 import json
 import urllib.request
 import urllib.parse
-import urllib.error
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
@@ -39,7 +38,7 @@ def main():
     yesterday = datetime.now(timezone.utc) - timedelta(days=1)
     date_str = yesterday.strftime("%Y-%m-%d")
 
-    # Sample 4 timestamps across yesterday to get full day coverage
+    # Sample 4 timestamps across yesterday for full day coverage
     timestamps = [
         int(yesterday.replace(hour=3,  minute=0, second=0).timestamp()),
         int(yesterday.replace(hour=9,  minute=0, second=0).timestamp()),
@@ -49,20 +48,22 @@ def main():
 
     print(f"Fetching historic flight data for {date_str}...")
 
-    # Collect all flights across all timestamps
-    # Use fr24_id to deduplicate — each unique flight counted once
     all_flights = {}  # fr24_id -> flight record
 
     for ts in timestamps:
         print(f"  Querying timestamp {ts}...")
         try:
-            data = api_get("/historic/flight-positions/light", {
+            # Use FULL endpoint which includes airline_iata, origin, destination
+            data = api_get("/historic/flight-positions/full", {
                 "timestamp": ts,
-                "bounds": "72,34,-25,45",  # Europe: N,S,W,E
+                "bounds": "72,34,-25,45",
                 "limit": 1500
             })
             flights = data.get("data", [])
             print(f"    Got {len(flights)} flights")
+            if flights and ts == timestamps[0]:
+                print(f"    Sample fields: {list(flights[0].keys())}")
+                print(f"    Sample: {json.dumps(flights[0], indent=2)}")
             for f in flights:
                 fid = f.get("fr24_id") or f.get("id") or f.get("hex")
                 if fid and fid not in all_flights:
@@ -76,15 +77,9 @@ def main():
         print("ERROR: No flights returned")
         exit(1)
 
-    # Print sample to understand field names
-    sample = list(all_flights.values())[0]
-    print(f"Sample flight fields: {list(sample.keys())}")
-    print(f"Sample flight: {json.dumps(sample, indent=2)}")
-
     # Group by airline
     airline_flights = defaultdict(list)
     for fid, f in all_flights.items():
-        # Try all possible airline IATA field names
         airline_iata = (
             f.get("airline_iata") or
             f.get("operating_airline_iata") or
@@ -95,13 +90,12 @@ def main():
         if airline_iata in EUROPEAN_AIRLINES:
             airline_flights[EUROPEAN_AIRLINES[airline_iata]].append(f)
 
-    print(f"Airlines matched: {dict((k, len(v)) for k,v in airline_flights.items())}")
+    print(f"Airlines matched: {dict((k, len(v)) for k,v in sorted(airline_flights.items(), key=lambda x: -len(x[1]))[:10])}")
 
     if not airline_flights:
-        print("No European airlines matched — check field names above")
+        print("No European airlines matched")
         exit(1)
 
-    # Sort by flight count, top 10
     sorted_airlines = sorted(airline_flights.items(), key=lambda x: len(x[1]), reverse=True)[:10]
 
     top10 = []
@@ -110,14 +104,12 @@ def main():
     for rank, (name, flights) in enumerate(sorted_airlines, 1):
         routes = []
         for f in flights:
-            dep = (f.get("origin") or f.get("dep_iata") or f.get("departure") or "").strip()
-            arr = (f.get("destination") or f.get("arr_iata") or f.get("arrival") or "").strip()
+            dep = (f.get("origin") or f.get("dep_iata") or f.get("departure_airport_iata") or "").strip()
+            arr = (f.get("destination") or f.get("arr_iata") or f.get("arrival_airport_iata") or "").strip()
             if dep and arr and dep != arr:
                 routes.append((dep, arr))
 
-        # Block hours: avg 2h per flight
         total_hours = round(len(flights) * 2.0, 1)
-
         unique_routes = list(set(routes))
         longest  = f"{unique_routes[0][0]} → {unique_routes[0][1]}"  if unique_routes else "N/A"
         shortest = f"{unique_routes[-1][0]} → {unique_routes[-1][1]}" if unique_routes else "N/A"
