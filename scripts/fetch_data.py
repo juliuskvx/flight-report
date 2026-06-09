@@ -16,14 +16,16 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (compatible; flight-report/1.0)"
 }
 
-EUROPEAN_AIRLINES = {
-    "FR": "Ryanair", "U2": "easyJet", "LH": "Lufthansa",
-    "TK": "Turkish Airlines", "AF": "Air France", "BA": "British Airways",
-    "W6": "Wizz Air", "KL": "KLM", "VY": "Vueling", "LX": "Swiss",
-    "IB": "Iberia", "AZ": "ITA Airways", "SK": "SAS",
-    "DY": "Norwegian", "SN": "Brussels Airlines", "OS": "Austrian",
-    "EI": "Aer Lingus", "TP": "TAP Air Portugal", "A3": "Aegean",
-    "BT": "airBaltic", "PC": "Pegasus",
+# ICAO callsign prefix -> airline name
+AIRLINE_ICAO = {
+    "RYR": "Ryanair", "EZY": "easyJet", "DLH": "Lufthansa",
+    "THY": "Turkish Airlines", "AFR": "Air France", "BAW": "British Airways",
+    "WZZ": "Wizz Air", "KLM": "KLM", "VLG": "Vueling", "SWR": "Swiss",
+    "IBE": "Iberia", "AZA": "ITA Airways", "SAS": "SAS",
+    "NAX": "Norwegian", "BEL": "Brussels Airlines", "AUA": "Austrian",
+    "EIN": "Aer Lingus", "TAP": "TAP Air Portugal", "AEE": "Aegean",
+    "BTI": "airBaltic", "PGT": "Pegasus", "TOM": "TUI", "EXS": "Jet2",
+    "CFG": "Condor", "GWI": "Germanwings", "SXS": "SunExpress",
 }
 
 def api_get(path, params=None):
@@ -34,16 +36,21 @@ def api_get(path, params=None):
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode())
 
+def get_airline_from_callsign(callsign):
+    if not callsign:
+        return None
+    prefix = callsign[:3].upper()
+    return AIRLINE_ICAO.get(prefix)
+
 def main():
     yesterday = datetime.now(timezone.utc) - timedelta(days=1)
     date_str = yesterday.strftime("%Y-%m-%d")
 
-    # Sample 4 timestamps across yesterday for full day coverage
+    # Query every 2 hours across yesterday = 12 snapshots
+    # Use offset pagination to get more than 20 flights per snapshot
     timestamps = [
-        int(yesterday.replace(hour=3,  minute=0, second=0).timestamp()),
-        int(yesterday.replace(hour=9,  minute=0, second=0).timestamp()),
-        int(yesterday.replace(hour=15, minute=0, second=0).timestamp()),
-        int(yesterday.replace(hour=21, minute=0, second=0).timestamp()),
+        int(yesterday.replace(hour=h, minute=0, second=0).timestamp())
+        for h in [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22]
     ]
 
     print(f"Fetching historic flight data for {date_str}...")
@@ -51,49 +58,48 @@ def main():
     all_flights = {}  # fr24_id -> flight record
 
     for ts in timestamps:
-        print(f"  Querying timestamp {ts}...")
-        try:
-            # Use FULL endpoint which includes airline_iata, origin, destination
-            data = api_get("/historic/flight-positions/full", {
-                "timestamp": ts,
-                "bounds": "72,34,-25,45",
-                "limit": 1500
-            })
-            flights = data.get("data", [])
-            print(f"    Got {len(flights)} flights")
-            if flights and ts == timestamps[0]:
-                print(f"    Sample fields: {list(flights[0].keys())}")
-                print(f"    Sample: {json.dumps(flights[0], indent=2)}")
-            for f in flights:
-                fid = f.get("fr24_id") or f.get("id") or f.get("hex")
-                if fid and fid not in all_flights:
-                    all_flights[fid] = f
-        except Exception as e:
-            print(f"    Error: {e}")
+        # Paginate with offsets to get more flights per timestamp
+        for offset in [0, 20, 40, 60, 80]:
+            try:
+                data = api_get("/historic/flight-positions/full", {
+                    "timestamp": ts,
+                    "bounds": "72,34,-25,45",
+                    "limit": 20,
+                    "offset": offset
+                })
+                flights = data.get("data", [])
+                if not flights:
+                    break
+                for f in flights:
+                    fid = f.get("fr24_id") or f.get("hex")
+                    if fid and fid not in all_flights:
+                        all_flights[fid] = f
+                if len(flights) < 20:
+                    break
+            except Exception as e:
+                print(f"  Error ts={ts} offset={offset}: {e}")
+                break
 
     print(f"Total unique flights: {len(all_flights)}")
 
-    if not all_flights:
-        print("ERROR: No flights returned")
-        exit(1)
-
-    # Group by airline
+    # Group by airline using callsign prefix
     airline_flights = defaultdict(list)
+    unmatched_callsigns = set()
+
     for fid, f in all_flights.items():
-        airline_iata = (
-            f.get("airline_iata") or
-            f.get("operating_airline_iata") or
-            f.get("airline") or
-            ""
-        ).upper().strip()
+        callsign = f.get("callsign") or ""
+        name = get_airline_from_callsign(callsign)
+        if name:
+            airline_flights[name].append(f)
+        else:
+            if callsign:
+                unmatched_callsigns.add(callsign[:3])
 
-        if airline_iata in EUROPEAN_AIRLINES:
-            airline_flights[EUROPEAN_AIRLINES[airline_iata]].append(f)
-
-    print(f"Airlines matched: {dict((k, len(v)) for k,v in sorted(airline_flights.items(), key=lambda x: -len(x[1]))[:10])}")
+    print(f"Airlines matched: {dict((k, len(v)) for k,v in sorted(airline_flights.items(), key=lambda x: -len(x[1])))}")
+    print(f"Unmatched prefixes (sample): {list(unmatched_callsigns)[:20]}")
 
     if not airline_flights:
-        print("No European airlines matched")
+        print("No airlines matched — check unmatched prefixes above")
         exit(1)
 
     sorted_airlines = sorted(airline_flights.items(), key=lambda x: len(x[1]), reverse=True)[:10]
@@ -104,8 +110,8 @@ def main():
     for rank, (name, flights) in enumerate(sorted_airlines, 1):
         routes = []
         for f in flights:
-            dep = (f.get("origin") or f.get("dep_iata") or f.get("departure_airport_iata") or "").strip()
-            arr = (f.get("destination") or f.get("arr_iata") or f.get("arrival_airport_iata") or "").strip()
+            dep = (f.get("orig_iata") or "").strip()
+            arr = (f.get("dest_iata") or "").strip()
             if dep and arr and dep != arr:
                 routes.append((dep, arr))
 
