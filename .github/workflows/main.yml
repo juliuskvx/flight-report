@@ -31,7 +31,7 @@ jobs:
 
       - name: Fetch live flight data
         env:
-          FR24_API_KEY: ${{ secrets.FR24_API_KEY }}
+          FR24_API_KEY: ${{ secrets.FR24_API_TOKEN }}
         run: python3 scripts/fetch_data.py
 
       - name: Generate charts
