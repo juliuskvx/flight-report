@@ -2,12 +2,14 @@ import os
 import json
 import urllib.request
 import urllib.parse
-print(f"Token length: {len(API_TOKEN)}")
-print(f"Token starts with: {API_TOKEN[:20] if API_TOKEN else 'EMPTY'}")
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
 API_TOKEN = os.environ.get("FR24_API_TOKEN", "")
+
+print(f"Token length: {len(API_TOKEN)}")
+print(f"Token starts with: {API_TOKEN[:20] if API_TOKEN else 'EMPTY'}")
+
 BASE_URL = "https://fr24api.flightradar24.com/api"
 
 HEADERS = {
@@ -59,7 +61,7 @@ def main():
             print(f"  {name}: error - {e}")
 
     if not airline_data:
-        print("No data — trying with airline_iata param instead...")
+        print("No data — trying with airline param instead...")
         for iata, name in EUROPEAN_AIRLINES.items():
             try:
                 data = api_get("/flight-summary/light", {
@@ -77,7 +79,6 @@ def main():
 
     if not airline_data:
         print("ERROR: No data returned from FR24 API. Check token and plan.")
-        # Print a sample raw response for debugging
         try:
             data = api_get("/flight-summary/light", {
                 "date_from": f"{date_str}T00:00:00Z",
@@ -91,7 +92,6 @@ def main():
             print(f"Raw request error: {e}")
         exit(1)
 
-    # Sort by flight count, take top 10
     sorted_airlines = sorted(airline_data.items(), key=lambda x: len(x[1]), reverse=True)[:10]
 
     top10 = []
@@ -104,7 +104,6 @@ def main():
         for f in flights:
             dep_iata = f.get("origin") or f.get("departure_iata") or f.get("dep_iata") or "???"
             arr_iata = f.get("destination") or f.get("arrival_iata") or f.get("arr_iata") or "???"
-
             dep_time = f.get("actual_takeoff_time") or f.get("departure_time") or f.get("takeoff_time")
             arr_time = f.get("actual_landing_time") or f.get("arrival_time") or f.get("landing_time")
 
@@ -122,7 +121,7 @@ def main():
                         durations.append(dur)
                         routes.append((dur, route_str))
                         all_routes.append({"airline": name, "route": route_str, "hours": round(dur, 2)})
-                except Exception as e:
+                except:
                     pass
 
         total_hours = round(sum(durations), 1) if durations else round(len(flights) * 2.0, 1)
