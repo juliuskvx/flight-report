@@ -3,21 +3,27 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import json
 
 os.makedirs('output', exist_ok=True)
 
-airlines = ["Ryanair","easyJet","Lufthansa","Turkish","Air France","British A.","Wizz Air","KLM","Vueling","Swiss"]
-flights  = [3850, 2640, 2210, 1980, 1760, 1540, 1320, 1180, 980, 820]
-hours    = [5775, 4224, 5966, 5346, 4576, 4312, 2244, 3304, 1666, 2214]
+# Load real data
+with open('output/flight_data.json') as f:
+    fd = json.load(f)
+
+top10 = fd['top10Airlines']
+airlines = [a['airline'].replace('Turkish Airlines','Turkish').replace('British Airways','British A.') for a in top10]
+flights  = [a['flightCount'] for a in top10]
+hours    = [a['totalFlightHours'] for a in top10]
 blues    = ['#0A2342','#1B4F8A','#1E90D4','#2196F3','#42A5F5','#64B5F6','#90CAF9','#1565C0','#0D47A1','#0288D1']
 
 # Chart 1 — vertical bar: flight counts
 fig, ax = plt.subplots(figsize=(13, 5.5))
 fig.patch.set_facecolor('white')
 ax.set_facecolor('white')
-bars = ax.bar(airlines, flights, color=blues, width=0.6, zorder=3)
+bars = ax.bar(airlines, flights, color=blues[:len(airlines)], width=0.6, zorder=3)
 for bar, val in zip(bars, flights):
-    ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+30, f'{val:,}',
+    ax.text(bar.get_x()+bar.get_width()/2, bar.get_height()+1, f'{val:,}',
             ha='center', va='bottom', fontsize=10, fontweight='bold', color='#1E293B')
 ax.set_ylabel('Number of Flights', fontsize=11, color='#64748B')
 ax.tick_params(colors='#64748B', labelsize=10)
@@ -40,7 +46,7 @@ ax.set_facecolor('white')
 y = np.arange(len(airlines))
 bars = ax.barh(y, hours[::-1], color='#1E90D4', height=0.6, zorder=3)
 for bar, val in zip(bars, hours[::-1]):
-    ax.text(bar.get_width()+30, bar.get_y()+bar.get_height()/2, f'{val:,}h',
+    ax.text(bar.get_width()+0.5, bar.get_y()+bar.get_height()/2, f'{val:,}h',
             ha='left', va='center', fontsize=10, fontweight='bold', color='#1E293B')
 ax.set_yticks(y)
 ax.set_yticklabels(airlines[::-1], fontsize=10, color='#64748B')
