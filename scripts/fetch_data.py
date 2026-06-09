@@ -5,10 +5,8 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
-# OpenSky - free, no API key needed for basic access
 BASE_URL = "https://opensky-network.org/api"
 
-# ICAO callsign prefixes -> airline name
 AIRLINE_CALLSIGNS = {
     "RYR": "Ryanair", "EZY": "easyJet", "DLH": "Lufthansa",
     "THY": "Turkish Airlines", "AFR": "Air France", "BAW": "British Airways",
@@ -20,11 +18,63 @@ AIRLINE_CALLSIGNS = {
     "CFG": "Condor", "SXS": "SunExpress", "TVS": "Transavia",
 }
 
+# ICAO 4-letter -> IATA 3-letter for common European airports
+ICAO_TO_IATA = {
+    "EGLL":"LHR","EGSS":"STN","EGGW":"LTN","EGKK":"LGW","EGCC":"MAN","EGGP":"LPL",
+    "EGBB":"BHX","EGPH":"EDI","EGPF":"GLA","EGNX":"EMA","EGTE":"EXT","EGHI":"SOU",
+    "EIDW":"DUB","EINN":"SNN","EICK":"ORK",
+    "LFPG":"CDG","LFPO":"ORY","LFML":"MRS","LFMN":"NCE","LFLY":"LYS","LFBD":"BOD",
+    "LFRS":"NTE","LFLL":"LYS","LFTW":"MPL",
+    "EDDF":"FRA","EDDM":"MUC","EDDB":"BER","EDDH":"HAM","EDDK":"CGN","EDDL":"DUS",
+    "EDDS":"STR","EDDG":"FMO","EDDN":"NUE","EDDT":"TXL",
+    "EHAM":"AMS","EHRD":"RTM",
+    "LEMD":"MAD","LEBL":"BCN","LEPA":"PMI","LEAL":"ALC","LEMG":"AGP","LEBB":"BIO",
+    "LEVC":"VLC","LEZL":"SVQ","LEGE":"GRO","LERJ":"REU","LEGR":"GRX","LEIB":"IBZ",
+    "GCLP":"LPA","GCFV":"FUE","GCTS":"TFS","GCXO":"TFN","GCRR":"ACE","GCLA":"SPC",
+    "LIRF":"FCO","LIMC":"MXP","LIME":"BGY","LIRA":"CIA","LIPZ":"VCE","LIRN":"NAP",
+    "LICC":"CTA","LICJ":"PMO","LICA":"SUF","LIBP":"PSR",
+    "LOWW":"VIE","LOWI":"INN","LOWG":"GRZ","LOWS":"SZG",
+    "LKPR":"PRG",
+    "EPWA":"WAW","EPKK":"KRK","EPGD":"GDN","EPWR":"WRO","EPKT":"KTW",
+    "LHBP":"BUD",
+    "LROP":"OTP","LRCL":"CLJ",
+    "LBSF":"SOF",
+    "LDZA":"ZAG","LDSP":"SPU","LDDU":"DBV",
+    "LYBT":"BEG",
+    "LWSK":"SKP",
+    "LTFM":"IST","LTAI":"AYT","LTBJ":"ADB","LTAC":"ESB","LTBA":"SAW",
+    "UKBB":"KBP","UKKK":"IEV",
+    "UUEE":"SVO","UUDD":"DME","UUWW":"VKO","URSS":"AER",
+    "EVRA":"RIX","EYVI":"VNO","EETN":"TLL",
+    "EFHK":"HEL","ENGM":"OSL","EKCH":"CPH","ESSA":"ARN","ESGG":"GOT",
+    "EBBR":"BRU","EBCI":"CRL",
+    "ELLX":"LUX",
+    "LSGG":"GVA","LSZH":"ZRH","LSZA":"LUG",
+    "LPPT":"LIS","LPPR":"OPO","LPFR":"FAO",
+    "LGAV":"ATH","LGTS":"SKG","LGIR":"HER","LGRP":"RHO","LGKF":"EFL","LGZA":"ZTH",
+    "LCLK":"LCA","LCPH":"PFO",
+    "LLBG":"TLV",
+    "OJAI":"AMM","OSDI":"DAM","OLBA":"BEY",
+    "HECA":"CAI",
+    "DTMB":"MIR","DTTJ":"DJE","DTTZ":"TUN",
+    "GMME":"RBA","GMMN":"CMN","GMAD":"AGA","GMFM":"FEZ",
+    "DAAG":"ALG","DAOO":"ORN","DAAT":"TMR",
+    "HLLT":"TIP","HLLB":"BEN",
+    "GCXO":"TFN","GCLA":"SPC",
+    "BIKF":"KEF",
+    "LMML":"MLA",
+    "LDLO":"LSZ",
+}
+
+def icao_to_iata(icao):
+    if not icao:
+        return None
+    return ICAO_TO_IATA.get(icao.upper(), icao[:3].upper())
+
 def get_airline(callsign):
     if not callsign:
         return None
-    prefix = callsign.strip()[:3].upper()
-    return AIRLINE_CALLSIGNS.get(prefix)
+    return AIRLINE_CALLSIGNS.get(callsign.strip()[:3].upper())
 
 def api_get(path, params=None):
     url = f"{BASE_URL}{path}"
@@ -37,49 +87,32 @@ def api_get(path, params=None):
 def main():
     yesterday = datetime.now(timezone.utc) - timedelta(days=1)
     date_str = yesterday.strftime("%Y-%m-%d")
-
-    # Full day range for yesterday
     begin = int(yesterday.replace(hour=0,  minute=0, second=0, microsecond=0).timestamp())
     end   = int(yesterday.replace(hour=23, minute=59, second=59, microsecond=0).timestamp())
 
-    print(f"Fetching OpenSky flight data for {date_str}...")
-    print(f"Time range: {begin} -> {end}")
+    print(f"Fetching OpenSky data for {date_str}...")
 
-    # OpenSky /flights/all returns all flights in a time window (max 2 hours per call)
-    # Split the day into 12 x 2-hour windows
-    all_flights = {}  # icao24+callsign -> flight record
-
-    window = 2 * 3600  # 2 hours in seconds
+    all_flights = {}
+    window = 2 * 3600
     t = begin
     while t < end:
         t_end = min(t + window, end)
         try:
-            flights = api_get("/flights/all", {
-                "begin": t,
-                "end": t_end
-            })
+            flights = api_get("/flights/all", {"begin": t, "end": t_end})
             if flights:
-                print(f"  Window {datetime.fromtimestamp(t, tz=timezone.utc).strftime('%H:%M')}-{datetime.fromtimestamp(t_end, tz=timezone.utc).strftime('%H:%M')}: {len(flights)} flights")
+                print(f"  {datetime.fromtimestamp(t, tz=timezone.utc).strftime('%H:%M')}-{datetime.fromtimestamp(t_end, tz=timezone.utc).strftime('%H:%M')}: {len(flights)} flights")
                 for f in flights:
-                    key = f.get("icao24", "") + "_" + (f.get("callsign") or "")
+                    key = f.get("icao24","") + "_" + (f.get("callsign") or "")
                     if key not in all_flights:
                         all_flights[key] = f
-            else:
-                print(f"  Window {datetime.fromtimestamp(t, tz=timezone.utc).strftime('%H:%M')}: 0 flights")
         except Exception as e:
-            print(f"  Window error: {e}")
+            print(f"  Error: {e}")
         t = t_end
 
-    print(f"\nTotal unique flights: {len(all_flights)}")
-
+    print(f"Total unique flights: {len(all_flights)}")
     if not all_flights:
-        print("ERROR: No flights returned from OpenSky")
+        print("ERROR: No flights returned")
         exit(1)
-
-    # Print sample
-    sample = list(all_flights.values())[0]
-    print(f"Sample fields: {list(sample.keys())}")
-    print(f"Sample: {json.dumps(sample, indent=2)}")
 
     # Group by airline
     airline_flights = defaultdict(list)
@@ -88,7 +121,7 @@ def main():
         if name:
             airline_flights[name].append(f)
 
-    print(f"\nAirlines matched: {dict((k, len(v)) for k,v in sorted(airline_flights.items(), key=lambda x: -len(x[1])))}")
+    print(f"Airlines: {dict((k,len(v)) for k,v in sorted(airline_flights.items(), key=lambda x:-len(x[1])))}")
 
     if not airline_flights:
         print("No airlines matched")
@@ -103,8 +136,8 @@ def main():
         routes = []
         durations = []
         for f in flights:
-            dep = f.get("estDepartureAirport") or ""
-            arr = f.get("estArrivalAirport") or ""
+            dep = icao_to_iata(f.get("estDepartureAirport"))
+            arr = icao_to_iata(f.get("estArrivalAirport"))
             t_dep = f.get("firstSeen")
             t_arr = f.get("lastSeen")
             if dep and arr and dep != arr:
@@ -116,8 +149,6 @@ def main():
 
         total_hours = round(sum(durations), 1) if durations else round(len(flights) * 2.0, 1)
         unique_routes = list(set(routes))
-
-        # Sort routes by length for longest/shortest
         longest  = f"{unique_routes[0][0]} → {unique_routes[0][1]}"  if unique_routes else "N/A"
         shortest = f"{unique_routes[-1][0]} → {unique_routes[-1][1]}" if unique_routes else "N/A"
 
@@ -152,7 +183,7 @@ def main():
         json.dump(output, fout, indent=2)
 
     print(f"\nSaved output/flight_data.json")
-    print(f"Top airline: {top10[0]['airline']} with {top10[0]['flightCount']} flights")
+    print(f"Top: {top10[0]['airline']} — {top10[0]['flightCount']} flights")
     print(f"Total: {total_flights} flights | {total_hours}h")
 
 if __name__ == "__main__":
