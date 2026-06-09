@@ -2,10 +2,19 @@ import os
 import json
 import urllib.request
 import urllib.parse
+import base64
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
 BASE_URL = "https://opensky-network.org/api"
+
+OPENSKY_USER = os.environ.get("OPENSKY_USER", "")
+OPENSKY_PASS = os.environ.get("OPENSKY_PASS", "")
+
+credentials = base64.b64encode(f"{OPENSKY_USER}:{OPENSKY_PASS}".encode()).decode()
+AUTH_HEADER = {"Authorization": f"Basic {credentials}", "User-Agent": "flight-report/1.0"}
+
+print(f"Using OpenSky user: {OPENSKY_USER}")
 
 AIRLINE_CALLSIGNS = {
     "RYR": "Ryanair", "EZY": "easyJet", "DLH": "Lufthansa",
@@ -18,13 +27,12 @@ AIRLINE_CALLSIGNS = {
     "CFG": "Condor", "SXS": "SunExpress", "TVS": "Transavia",
 }
 
-# ICAO 4-letter -> IATA 3-letter for common European airports
 ICAO_TO_IATA = {
     "EGLL":"LHR","EGSS":"STN","EGGW":"LTN","EGKK":"LGW","EGCC":"MAN","EGGP":"LPL",
     "EGBB":"BHX","EGPH":"EDI","EGPF":"GLA","EGNX":"EMA","EGTE":"EXT","EGHI":"SOU",
     "EIDW":"DUB","EINN":"SNN","EICK":"ORK",
     "LFPG":"CDG","LFPO":"ORY","LFML":"MRS","LFMN":"NCE","LFLY":"LYS","LFBD":"BOD",
-    "LFRS":"NTE","LFTW":"MPL","LFLL":"LYS","LFBZ":"BIQ","LFBT":"LDE",
+    "LFRS":"NTE","LFTW":"MPL","LFBZ":"BIQ","LFBT":"LDE",
     "EDDF":"FRA","EDDM":"MUC","EDDB":"BER","EDDH":"HAM","EDDK":"CGN","EDDL":"DUS",
     "EDDS":"STR","EDDG":"FMO","EDDN":"NUE",
     "EHAM":"AMS","EHRD":"RTM",
@@ -32,7 +40,7 @@ ICAO_TO_IATA = {
     "LEVC":"VLC","LEZL":"SVQ","LEGE":"GRO","LERJ":"REU","LEGR":"GRX","LEIB":"IBZ",
     "GCLP":"LPA","GCFV":"FUE","GCTS":"TFS","GCXO":"TFN","GCRR":"ACE","GCLA":"SPC",
     "LIRF":"FCO","LIMC":"MXP","LIME":"BGY","LIRA":"CIA","LIPZ":"VCE","LIRN":"NAP",
-    "LICC":"CTA","LICJ":"PMO","LICA":"SUF","LIBP":"PSR","LIBD":"BRI","LIBF":"FOG",
+    "LICC":"CTA","LICJ":"PMO","LIBD":"BRI","LIBF":"FOG",
     "LOWW":"VIE","LOWI":"INN","LOWG":"GRZ","LOWS":"SZG",
     "LKPR":"PRG",
     "EPWA":"WAW","EPKK":"KRK","EPGD":"GDN","EPWR":"WRO","EPKT":"KTW",
@@ -40,38 +48,27 @@ ICAO_TO_IATA = {
     "LROP":"OTP","LRCL":"CLJ",
     "LBSF":"SOF",
     "LDZA":"ZAG","LDSP":"SPU","LDDU":"DBV",
-    "LYBT":"BEG",
-    "LWSK":"SKP",
+    "LYBT":"BEG","LWSK":"SKP",
     "LTFM":"IST","LTAI":"AYT","LTBJ":"ADB","LTAC":"ESB","LTBA":"SAW",
-    "LTFE":"BJV","LTBS":"DLM","LTCG":"TZX","LTBU":"TEQ",
+    "LTFE":"BJV","LTBS":"DLM","LTCG":"TZX",
     "EVRA":"RIX","EYVI":"VNO","EETN":"TLL",
     "EFHK":"HEL","ENGM":"OSL","EKCH":"CPH","ESSA":"ARN","ESGG":"GOT",
-    "EBBR":"BRU","EBCI":"CRL",
-    "ELLX":"LUX",
+    "EBBR":"BRU","EBCI":"CRL","ELLX":"LUX",
     "LSGG":"GVA","LSZH":"ZRH",
     "LPPT":"LIS","LPPR":"OPO","LPFR":"FAO",
     "LGAV":"ATH","LGTS":"SKG","LGIR":"HER","LGRP":"RHO","LGKF":"EFL","LGZA":"ZTH",
-    "LCLK":"LCA","LCPH":"PFO",
-    "LLBG":"TLV",
-    "BIKF":"KEF",
-    "LMML":"MLA",
-    "HECA":"CAI",
-    "DTMB":"MIR","DTTJ":"DJE","DTTZ":"TUN",
-    "GMME":"RBA","GMMN":"CMN","GMAD":"AGA","GMFM":"FEZ",
-    "DAAG":"ALG","DAOO":"ORN",
+    "LCLK":"LCA","LCPH":"PFO","LLBG":"TLV","BIKF":"KEF","LMML":"MLA",
+    "HECA":"CAI","DTMB":"MIR","DTTJ":"DJE","DTTZ":"TUN",
+    "GMME":"RBA","GMMN":"CMN","GMAD":"AGA","DAAG":"ALG","DAOO":"ORN",
 }
 
-# Known valid IATA codes (3 uppercase letters)
 def is_valid_iata(code):
     return code and len(code) == 3 and code.isalpha() and code.isupper()
 
 def icao_to_iata(icao):
     if not icao:
         return None
-    mapped = ICAO_TO_IATA.get(icao.upper())
-    if mapped:
-        return mapped
-    return None  # Return None instead of guessing if not in our lookup
+    return ICAO_TO_IATA.get(icao.upper())
 
 def get_airline(callsign):
     if not callsign:
@@ -82,7 +79,7 @@ def api_get(path, params=None):
     url = f"{BASE_URL}{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers={"User-Agent": "flight-report/1.0"})
+    req = urllib.request.Request(url, headers=AUTH_HEADER)
     with urllib.request.urlopen(req, timeout=30) as resp:
         return json.loads(resp.read().decode())
 
@@ -117,7 +114,6 @@ def main():
         print("ERROR: No flights returned")
         exit(1)
 
-    # Group by airline
     airline_flights = defaultdict(list)
     for key, f in all_flights.items():
         name = get_airline(f.get("callsign"))
@@ -127,12 +123,12 @@ def main():
     sorted_airlines = sorted(airline_flights.items(), key=lambda x: len(x[1]), reverse=True)[:10]
     print(f"Top airlines: {[(k, len(v)) for k,v in sorted_airlines]}")
 
-    if not airline_flights:
+    if not sorted_airlines:
         print("No airlines matched")
         exit(1)
 
     top10 = []
-    all_route_durations = []  # (dur, dep, arr, airline)
+    all_route_durations = []
 
     for rank, (name, flights) in enumerate(sorted_airlines, 1):
         routes_with_dur = []
@@ -159,8 +155,6 @@ def main():
                     all_route_durations.append((dur, dep, arr, name))
 
         total_hours = round(total_dur, 1) if dur_count > 0 else round(len(flights) * 2.0, 1)
-
-        # Sort routes by duration for longest/shortest
         routes_with_dur.sort(key=lambda x: x[0], reverse=True)
         longest  = f"{routes_with_dur[0][1]} → {routes_with_dur[0][2]} ({routes_with_dur[0][0]:.1f}h)"  if routes_with_dur else "N/A"
         shortest = f"{routes_with_dur[-1][1]} → {routes_with_dur[-1][2]} ({routes_with_dur[-1][0]:.1f}h)" if routes_with_dur else "N/A"
@@ -174,7 +168,6 @@ def main():
             "shortestRoute": shortest,
         })
 
-    # Global longest/shortest using real durations
     all_route_durations.sort(key=lambda x: x[0], reverse=True)
     if all_route_durations:
         lng = all_route_durations[0]
