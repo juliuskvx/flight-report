@@ -1,17 +1,19 @@
 import os
 import json
+import urllib.request
+import urllib.parse
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
-# Install FR24 SDK
-import subprocess
-subprocess.run(["pip", "install", "fr24sdk", "--break-system-packages", "-q"], check=True)
-
-from fr24sdk.client import Client
-
 API_TOKEN = os.environ.get("FR24_API_KEY", "")
+BASE_URL = "https://fr24api.flightradar24.com/api"
 
-# Top European airlines by IATA code
+HEADERS = {
+    "Authorization": f"Bearer {API_TOKEN}",
+    "Accept-Version": "v1",
+    "Content-Type": "application/json"
+}
+
 EUROPEAN_AIRLINES = {
     "FR": "Ryanair", "U2": "easyJet", "LH": "Lufthansa",
     "TK": "Turkish Airlines", "AF": "Air France", "BA": "British Airways",
@@ -19,27 +21,52 @@ EUROPEAN_AIRLINES = {
     "IB": "Iberia", "AZ": "ITA Airways", "SK": "SAS",
     "DY": "Norwegian", "SN": "Brussels Airlines", "OS": "Austrian",
     "EI": "Aer Lingus", "TP": "TAP Air Portugal", "A3": "Aegean",
-    "BT": "airBaltic", "PC": "Pegasus", "XQ": "SunExpress",
+    "BT": "airBaltic", "PC": "Pegasus",
 }
 
+def api_get(path, params=None):
+    url = f"{BASE_URL}{path}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers=HEADERS)
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode())
+
 def main():
-    # Yesterday's date
-    yesterday = (datetime.now(timezone.utc) - timedelta(days=1))
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
     date_str = yesterday.strftime("%Y-%m-%d")
     print(f"Fetching flight data for {date_str}...")
 
-    airline_data = defaultdict(list)
+    airline_data = {}
 
-    with Client(api_token=API_TOKEN) as client:
+    for iata, name in EUROPEAN_AIRLINES.items():
+        try:
+            data = api_get("/flight-summary/light", {
+                "airline_icao": iata,
+                "date_from": f"{date_str}T00:00:00Z",
+                "date_to": f"{date_str}T23:59:59Z",
+                "limit": 1000
+            })
+            flights = data.get("data", [])
+            if flights:
+                airline_data[name] = flights
+                print(f"  {name}: {len(flights)} flights")
+            else:
+                print(f"  {name}: 0 flights")
+        except Exception as e:
+            print(f"  {name}: error - {e}")
+
+    if not airline_data:
+        print("No data — trying with airline_iata param instead...")
         for iata, name in EUROPEAN_AIRLINES.items():
             try:
-                # Fetch flight summaries for this airline on yesterday's date
-                result = client.flight_summary.get_light(
-                    airline_iata=iata,
-                    date_from=f"{date_str}T00:00:00",
-                    date_to=f"{date_str}T23:59:59"
-                )
-                flights = result.data if hasattr(result, 'data') else []
+                data = api_get("/flight-summary/light", {
+                    "airline": iata,
+                    "date_from": f"{date_str}T00:00:00Z",
+                    "date_to": f"{date_str}T23:59:59Z",
+                    "limit": 1000
+                })
+                flights = data.get("data", [])
                 if flights:
                     airline_data[name] = flights
                     print(f"  {name}: {len(flights)} flights")
@@ -47,7 +74,19 @@ def main():
                 print(f"  {name}: error - {e}")
 
     if not airline_data:
-        print("No data returned — check API token and plan")
+        print("ERROR: No data returned from FR24 API. Check token and plan.")
+        # Print a sample raw response for debugging
+        try:
+            data = api_get("/flight-summary/light", {
+                "date_from": f"{date_str}T00:00:00Z",
+                "date_to": f"{date_str}T06:00:00Z",
+                "limit": 10
+            })
+            print(f"Raw sample response keys: {list(data.keys())}")
+            if data.get("data"):
+                print(f"Sample flight keys: {list(data['data'][0].keys())}")
+        except Exception as e:
+            print(f"Raw request error: {e}")
         exit(1)
 
     # Sort by flight count, take top 10
@@ -61,23 +100,20 @@ def main():
         routes = []
 
         for f in flights:
-            # Get departure/arrival info
-            dep_iata = getattr(f, 'origin', None) or "???"
-            arr_iata = getattr(f, 'destination', None) or "???"
-            
-            # Calculate duration from actual times
-            dep_time = getattr(f, 'actual_takeoff_time', None) or getattr(f, 'scheduled_departure', None)
-            arr_time = getattr(f, 'actual_landing_time', None) or getattr(f, 'scheduled_arrival', None)
+            dep_iata = f.get("origin") or f.get("departure_iata") or f.get("dep_iata") or "???"
+            arr_iata = f.get("destination") or f.get("arrival_iata") or f.get("arr_iata") or "???"
 
-            dur = None
+            dep_time = f.get("actual_takeoff_time") or f.get("departure_time") or f.get("takeoff_time")
+            arr_time = f.get("actual_landing_time") or f.get("arrival_time") or f.get("landing_time")
+
             if dep_time and arr_time:
                 try:
                     if isinstance(dep_time, (int, float)):
                         dt_dep = datetime.fromtimestamp(dep_time, tz=timezone.utc)
                         dt_arr = datetime.fromtimestamp(arr_time, tz=timezone.utc)
                     else:
-                        dt_dep = datetime.fromisoformat(str(dep_time))
-                        dt_arr = datetime.fromisoformat(str(arr_time))
+                        dt_dep = datetime.fromisoformat(str(dep_time).replace("Z", "+00:00"))
+                        dt_arr = datetime.fromisoformat(str(arr_time).replace("Z", "+00:00"))
                     dur = (dt_arr - dt_dep).total_seconds() / 3600
                     if 0.3 < dur < 18:
                         route_str = f"{dep_iata} → {arr_iata}"
@@ -121,7 +157,7 @@ def main():
 
     print(f"\nSaved output/flight_data.json")
     print(f"Top airline: {top10[0]['airline']} with {top10[0]['flightCount']} flights")
-    print(f"Total flights: {total_flights} | Total hours: {total_hours}h")
+    print(f"Total: {total_flights} flights | {total_hours}h")
 
 if __name__ == "__main__":
     main()
