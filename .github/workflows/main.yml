@@ -29,6 +29,11 @@ jobs:
       - name: Install Python dependencies
         run: pip install matplotlib
 
+      - name: Fetch live flight data
+        env:
+          AVIATIONSTACK_KEY: ${{ secrets.AVIATIONSTACK_KEY }}
+        run: python3 scripts/fetch_data.py
+
       - name: Generate charts
         run: python3 scripts/gen_charts.py
 
@@ -36,7 +41,7 @@ jobs:
         run: node scripts/gen_pptx.js
 
       - name: Set report date
-        run: echo "REPORT_DATE=$(date -d 'yesterday' +%Y-%m-%d)" >> $GITHUB_ENV
+        run: echo "REPORT_DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_ENV
 
       - name: Send email
         uses: dawidd6/action-send-mail@v3
@@ -46,7 +51,7 @@ jobs:
           username: ${{ secrets.GMAIL_USER }}
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
           subject: "✈️ European Airlines Daily Report – ${{ env.REPORT_DATE }}"
-          body: "Good morning! Your European Airlines Daily Report for ${{ env.REPORT_DATE }} (full 24h: 00:00–23:59) is attached."
+          body: "Good morning! Your European Airlines Daily Report for ${{ env.REPORT_DATE }} is attached. Data sourced from AviationStack Live API."
           to: ${{ secrets.GMAIL_USER }}
           from: Flight Report Bot
           attachments: output/*.pptx
