@@ -3,6 +3,7 @@ import json
 import urllib.request
 import urllib.parse
 import base64
+import time
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
@@ -75,13 +76,21 @@ def get_airline(callsign):
         return None
     return AIRLINE_CALLSIGNS.get(callsign.strip()[:3].upper())
 
-def api_get(path, params=None):
+def api_get(path, params=None, timeout=60, retries=3, backoff=15):
     url = f"{BASE_URL}{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
-    req = urllib.request.Request(url, headers=AUTH_HEADER)
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read().decode())
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, headers=AUTH_HEADER)
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                return json.loads(resp.read().decode())
+        except Exception as e:
+            if attempt < retries:
+                print(f"    Attempt {attempt} failed: {e} — retrying in {backoff}s...")
+                time.sleep(backoff)
+            else:
+                raise
 
 def main():
     yesterday = datetime.now(timezone.utc) - timedelta(days=1)
@@ -92,27 +101,41 @@ def main():
     print(f"Fetching OpenSky data for {date_str}...")
 
     all_flights = {}
+    failed_windows = 0
     window = 2 * 3600
     t = begin
     while t < end:
         t_end = min(t + window, end)
+        label = datetime.fromtimestamp(t, tz=timezone.utc).strftime('%H:%M')
         try:
             flights = api_get("/flights/all", {"begin": t, "end": t_end})
             if flights:
-                label = datetime.fromtimestamp(t, tz=timezone.utc).strftime('%H:%M')
                 print(f"  {label}: {len(flights)} flights")
                 for f in flights:
                     key = f.get("icao24","") + "_" + (f.get("callsign") or "")
                     if key not in all_flights:
                         all_flights[key] = f
+            else:
+                print(f"  {label}: 0 flights (empty response)")
         except Exception as e:
-            print(f"  Error: {e}")
+            print(f"  {label}: FAILED after 3 attempts — {e}")
+            failed_windows += 1
         t = t_end
 
-    print(f"Total unique flights: {len(all_flights)}")
+    total_windows = 12
+    print(f"\nTotal unique flights: {len(all_flights)}")
+    print(f"Windows failed: {failed_windows}/{total_windows}")
+
+    if failed_windows == total_windows:
+        print("ERROR: All windows failed — OpenSky is unreachable today")
+        exit(1)
+
     if not all_flights:
         print("ERROR: No flights returned")
         exit(1)
+
+    if failed_windows > total_windows // 2:
+        print(f"WARNING: More than half the windows failed — data may be incomplete")
 
     airline_flights = defaultdict(list)
     for key, f in all_flights.items():
@@ -156,7 +179,7 @@ def main():
 
         total_hours = round(total_dur, 1) if dur_count > 0 else round(len(flights) * 2.0, 1)
         routes_with_dur.sort(key=lambda x: x[0], reverse=True)
-        longest  = f"{routes_with_dur[0][1]} → {routes_with_dur[0][2]} ({routes_with_dur[0][0]:.1f}h)"  if routes_with_dur else "N/A"
+        longest  = f"{routes_with_dur[0][1]} → {routes_with_dur[0][2]} ({routes_with_dur[0][0]:.1f}h)" if routes_with_dur else "N/A"
         shortest = f"{routes_with_dur[-1][1]} → {routes_with_dur[-1][2]} ({routes_with_dur[-1][0]:.1f}h)" if routes_with_dur else "N/A"
 
         top10.append({
