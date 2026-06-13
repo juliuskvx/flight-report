@@ -2,20 +2,68 @@ import os
 import json
 import urllib.request
 import urllib.parse
+import urllib.error
 import base64
 import time
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 
 BASE_URL = "https://opensky-network.org/api"
+TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 
 OPENSKY_USER = os.environ.get("OPENSKY_USER", "")
 OPENSKY_PASS = os.environ.get("OPENSKY_PASS", "")
-
-credentials = base64.b64encode(f"{OPENSKY_USER}:{OPENSKY_PASS}".encode()).decode()
-AUTH_HEADER = {"Authorization": f"Basic {credentials}", "User-Agent": "flight-report/1.0"}
+OPENSKY_CLIENT_ID = os.environ.get("OPENSKY_CLIENT_ID", "")
+OPENSKY_CLIENT_SECRET = os.environ.get("OPENSKY_CLIENT_SECRET", "")
 
 print(f"Using OpenSky user: {OPENSKY_USER}")
+print(f"OAuth2 client configured: {'yes' if OPENSKY_CLIENT_ID else 'no'}")
+
+# ---------------------------------------------------------------------------
+# OAuth2 token management
+# ---------------------------------------------------------------------------
+_token_cache = {"access_token": None, "expires_at": 0}
+
+def get_access_token():
+    """Fetch (and cache) an OAuth2 access token using client_credentials grant.
+    Tokens last 30 minutes; refresh proactively after 20 minutes."""
+    now = time.time()
+    if _token_cache["access_token"] and now < _token_cache["expires_at"]:
+        return _token_cache["access_token"]
+
+    payload = urllib.parse.urlencode({
+        "grant_type": "client_credentials",
+        "client_id": OPENSKY_CLIENT_ID,
+        "client_secret": OPENSKY_CLIENT_SECRET,
+    }).encode()
+
+    req = urllib.request.Request(
+        TOKEN_URL,
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        data = json.loads(resp.read().decode())
+
+    token = data["access_token"]
+    # expires_in is typically 1800s (30 min); refresh after 20 min to be safe
+    expires_in = data.get("expires_in", 1800)
+    _token_cache["access_token"] = token
+    _token_cache["expires_at"] = now + min(expires_in - 300, expires_in * 0.66)
+    print("  [auth] obtained new OAuth2 access token")
+    return token
+
+def get_auth_header():
+    """Return the auth header dict, preferring OAuth2 if configured,
+    falling back to Basic Auth otherwise."""
+    if OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET:
+        token = get_access_token()
+        return {"Authorization": f"Bearer {token}", "User-Agent": "flight-report/1.0"}
+    else:
+        credentials = base64.b64encode(f"{OPENSKY_USER}:{OPENSKY_PASS}".encode()).decode()
+        return {"Authorization": f"Basic {credentials}", "User-Agent": "flight-report/1.0"}
 
 AIRLINE_CALLSIGNS = {
     "RYR": "Ryanair", "EZY": "easyJet", "DLH": "Lufthansa",
@@ -82,9 +130,19 @@ def api_get(path, params=None, timeout=60, retries=3, backoff=15):
         url += "?" + urllib.parse.urlencode(params)
     for attempt in range(1, retries + 1):
         try:
-            req = urllib.request.Request(url, headers=AUTH_HEADER)
+            headers = get_auth_header()
+            req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            # If we get a 401/403 with OAuth2, force a fresh token on retry
+            if e.code in (401, 403) and OPENSKY_CLIENT_ID:
+                _token_cache["access_token"] = None
+            if attempt < retries:
+                print(f"    Attempt {attempt} failed: HTTP Error {e.code}: {e.reason} — retrying in {backoff}s...")
+                time.sleep(backoff)
+            else:
+                raise
         except Exception as e:
             if attempt < retries:
                 print(f"    Attempt {attempt} failed: {e} — retrying in {backoff}s...")
