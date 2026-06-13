@@ -1,49 +1,39 @@
 name: European Airlines Daily Report
-
 on:
   schedule:
     - cron: '0 7 * * *'
   workflow_dispatch:
-
 jobs:
   generate-report:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install Node dependencies
         run: npm install --no-package-lock
-
       - name: Install Python dependencies
         run: pip install matplotlib
-
       - name: Fetch flight data
         env:
           OPENSKY_USER: ${{ secrets.OPENSKY_USER }}
           OPENSKY_PASS: ${{ secrets.OPENSKY_PASS }}
+          OPENSKY_CLIENT_ID: ${{ secrets.OPENSKY_CLIENT_ID }}
+          OPENSKY_CLIENT_SECRET: ${{ secrets.OPENSKY_CLIENT_SECRET }}
         run: python3 scripts/fetch_data.py
-
       - name: Generate charts
         run: python3 scripts/gen_charts.py
-
       - name: Generate PPTX
         run: node scripts/gen_pptx.js
-
       - name: Set report date
         run: echo "REPORT_DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_ENV
-
       - name: Send email
         uses: dawidd6/action-send-mail@v3
         with:
