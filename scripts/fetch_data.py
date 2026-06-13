@@ -44,8 +44,10 @@ def get_access_token():
         method="POST",
     )
 
-    with urllib.request.urlopen(req, timeout=30) as resp:
+    print(f"  [auth] requesting token from {TOKEN_URL} ...")
+    with urllib.request.urlopen(req, timeout=20) as resp:
         data = json.loads(resp.read().decode())
+    print(f"  [auth] token response received")
 
     token = data["access_token"]
     # expires_in is typically 1800s (30 min); refresh after 20 min to be safe
@@ -124,13 +126,16 @@ def get_airline(callsign):
         return None
     return AIRLINE_CALLSIGNS.get(callsign.strip()[:3].upper())
 
-def api_get(path, params=None, timeout=60, retries=3, backoff=15):
+def api_get(path, params=None, timeout=20, retries=2, backoff=None):
+    if backoff is None:
+        backoff = int(os.environ.get("DEBUG_BACKOFF", "15"))
     url = f"{BASE_URL}{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
     for attempt in range(1, retries + 1):
         try:
             headers = get_auth_header()
+            print(f"    [api] requesting {url} ...")
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode())
@@ -158,11 +163,14 @@ def main():
 
     print(f"Fetching OpenSky data for {date_str}...")
 
+    max_windows = int(os.environ.get("DEBUG_MAX_WINDOWS", "12"))
+
     all_flights = {}
     failed_windows = 0
     window = 2 * 3600
     t = begin
-    while t < end:
+    windows_done = 0
+    while t < end and windows_done < max_windows:
         t_end = min(t + window, end)
         label = datetime.fromtimestamp(t, tz=timezone.utc).strftime('%H:%M')
         try:
@@ -179,8 +187,9 @@ def main():
             print(f"  {label}: FAILED after 3 attempts — {e}")
             failed_windows += 1
         t = t_end
+        windows_done += 1
 
-    total_windows = 12
+    total_windows = windows_done
     print(f"\nTotal unique flights: {len(all_flights)}")
     print(f"Windows failed: {failed_windows}/{total_windows}")
 
