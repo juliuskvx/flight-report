@@ -33,7 +33,7 @@ function header(slide, title, sub) {
   slide.addShape(pptx.shapes.RECTANGLE, {x:0, y:0, w:10, h:0.8, fill:{color:C.navy}});
   slide.addText(title, {x:0.4, y:0.05, w:7, h:0.7, fontSize:22, bold:true, color:C.white, fontFace:serif, valign:'middle'});
   if (sub) slide.addText(sub, {x:7.2, y:0.05, w:2.6, h:0.7, fontSize:11, color:C.ice, fontFace:sans, valign:'middle', align:'right'});
-  slide.addText('OpenSky Network · EuroAir Intel', {x:0, y:5.35, w:10, h:0.28, fontSize:9, color:C.slate, fontFace:sans, align:'center'});
+  slide.addText('OpenSky ADS-B Sample · EuroAir Intel', {x:0, y:5.35, w:10, h:0.28, fontSize:9, color:C.slate, fontFace:sans, align:'center'});
 }
 
 function card(slide, x, y, w, h, col) {
@@ -54,7 +54,7 @@ s1.addShape(pptx.shapes.RECTANGLE, {x:0, y:0, w:6.5, h:0.06, fill:{color:C.accen
 // Title text
 s1.addText('EuroAir', {x:0.55, y:0.8, w:6, h:1.1, fontSize:58, bold:true, color:C.white, fontFace:serif});
 s1.addText('Intel', {x:0.55, y:1.85, w:6, h:1.0, fontSize:58, bold:true, color:C.accent, fontFace:serif});
-s1.addText('Daily Flight Intelligence Report', {x:0.55, y:3.0, w:5.8, h:0.5, fontSize:16, color:C.ice, fontFace:sans});
+s1.addText('Daily Flight Activity Report', {x:0.55, y:3.0, w:5.8, h:0.5, fontSize:16, color:C.ice, fontFace:sans});
 s1.addText(dayName, {x:0.55, y:3.6, w:5.8, h:0.4, fontSize:13, color:C.slate, fontFace:sans});
 
 // Right side label
@@ -62,18 +62,18 @@ s1.addText('TOP 10\nEUROPEAN\nAIRLINES', {x:7.1, y:1.6, w:2.6, h:2.0, fontSize:2
 
 // Bottom bar
 s1.addShape(pptx.shapes.RECTANGLE, {x:0, y:5.15, w:10, h:0.475, fill:{color:C.blue}});
-s1.addText('SOURCE: OPENSKY NETWORK ADS-B · GENERATED DAILY AT 10:00 VILNIUS TIME', {x:0.4, y:5.2, w:9, h:0.35, fontSize:10, color:C.ice, fontFace:sans, charSpacing:2});
+s1.addText('ADS-B FLIGHT ACTIVITY SAMPLE · OPENSKY NETWORK · GENERATED DAILY AT 10:00 VILNIUS TIME', {x:0.4, y:5.2, w:9, h:0.35, fontSize:10, color:C.ice, fontFace:sans, charSpacing:2});
 
 // ── SLIDE 2: Key Metrics ──────────────────────────────────────────────────────
 const s2 = pptx.addSlide();
 s2.background = {color:C.offW};
-header(s2, 'Key Metrics — European Airspace Snapshot', today);
+header(s2, 'Key Metrics — Tracked Flight Activity', today);
 
 const metrics = [
-  {label:'Flights Tracked',    value: Number(fd.totalFlights24h).toLocaleString(),          unit:'flights',  col:C.blue},
-  {label:'Total Block Hours',  value: Number(fd.totalFlightHours24h).toLocaleString(),       unit:'hours',    col:C.mid},
+  {label:'Flights Tracked (Sample)', value: Number(fd.totalFlights24h).toLocaleString(),          unit:'ADS-B detections',  col:C.blue},
+  {label:'Total Block Hours (Sample)',  value: Number(fd.totalFlightHours24h).toLocaleString(),       unit:'hours, tracked flights',    col:C.mid},
   {label:'Airlines Ranked',   value: String(fd.top10Airlines.length),                       unit:'carriers', col:C.accent},
-  {label:'#1 Airline',        value: fd.top10Airlines[0].airline,                           unit:'by volume',col:C.navy},
+  {label:'#1 by Activity',        value: fd.top10Airlines[0].airline,                           unit:'most tracked flights',col:C.navy},
 ];
 
 metrics.forEach((m, i) => {
@@ -89,20 +89,20 @@ metrics.forEach((m, i) => {
 // Route highlight box
 s2.addShape(pptx.shapes.RECTANGLE, {x:0.3, y:4.55, w:9.4, h:0.65, fill:{color:C.navy}});
 s2.addText(
-  `✈  Longest: ${fd.longestFlight.airline}  ${fd.longestFlight.route}  (${fd.longestFlight.hours}h)        ✈  Shortest: ${fd.shortestFlight.airline}  ${fd.shortestFlight.route}  (${fd.shortestFlight.hours}h)`,
+  `✈  Longest tracked: ${fd.longestFlight.airline}  ${fd.longestFlight.route}  (${fd.longestFlight.hours}h)        ✈  Shortest tracked: ${fd.shortestFlight.airline}  ${fd.shortestFlight.route}  (${fd.shortestFlight.hours}h)`,
   {x:0.5, y:4.58, w:9.0, h:0.58, fontSize:11, color:C.ice, fontFace:sans, valign:'middle', align:'center'}
 );
 
 // ── SLIDE 3: Flight Count Bar Chart ──────────────────────────────────────────
 const s3 = pptx.addSlide();
 s3.background = {color:C.white};
-header(s3, 'Top 10 Airlines by Flight Count', today);
+header(s3, 'Top 10 Airlines by Tracked Flight Activity', today);
 s3.addImage({path:'output/chart_flights.png', x:0.2, y:0.88, w:9.6, h:4.42});
 
 // ── SLIDE 4: Market Share Pie ─────────────────────────────────────────────────
 const s4 = pptx.addSlide();
 s4.background = {color:C.offW};
-header(s4, 'Market Share — Flight Volume Distribution', today);
+header(s4, 'Relative Activity Share — Tracked Flight Volume', today);
 
 s4.addImage({path:'output/chart_pie.png', x:0.1, y:0.88, w:5.5, h:4.42});
 
@@ -114,23 +114,23 @@ fd.top10Airlines.slice(0,5).forEach((a, i) => {
   card(s4, 5.9, y, 3.8, 0.62, isFirst ? C.navy : C.white);
   s4.addText(`${a.rank}`, {x:6.0, y:y+0.08, w:0.4, h:0.45, fontSize:16, bold:true, color: isFirst ? C.accent : C.mid, fontFace:serif, align:'center'});
   s4.addText(a.airline, {x:6.45, y:y+0.08, w:2.4, h:0.25, fontSize:11, bold:true, color: isFirst ? C.white : C.text, fontFace:sans});
-  s4.addText(`${Number(a.flightCount).toLocaleString()} flights`, {x:6.45, y:y+0.33, w:2.4, h:0.22, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans});
+  s4.addText(`${Number(a.flightCount).toLocaleString()} tracked flights`, {x:6.45, y:y+0.33, w:2.4, h:0.22, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans});
 });
 
 // ── SLIDE 5: Block Hours Chart ────────────────────────────────────────────────
 const s5 = pptx.addSlide();
 s5.background = {color:C.white};
-header(s5, 'Total Block Hours by Airline', today);
+header(s5, 'Total Tracked Block Hours by Airline', today);
 s5.addImage({path:'output/chart_hours.png', x:0.2, y:0.88, w:9.6, h:4.42});
 
 // ── SLIDE 6: Full Data Table ──────────────────────────────────────────────────
 const s6 = pptx.addSlide();
 s6.background = {color:C.white};
-header(s6, 'Full Airline Intelligence Breakdown', today);
+header(s6, 'Full Activity Breakdown (Tracked Sample)', today);
 
 const hOpts = {bold:true, color:C.white, fill:{color:C.navy}, fontSize:10, fontFace:sans, align:'center'};
 const tRows = [
-  ['#','Airline','Flights','Block Hrs','Longest Route','Shortest Route'].map(h=>({text:h, options:hOpts})),
+  ['#','Airline','Tracked Flights','Block Hrs','Longest Route','Shortest Route'].map(h=>({text:h, options:hOpts})),
   ...fd.top10Airlines.map((a, i) => {
     const isFirst = i === 0;
     const bg = isFirst ? 'FFF8E7' : (i % 2 === 0 ? C.white : C.offW);
@@ -154,32 +154,34 @@ const tRows = [
 ];
 
 s6.addTable(tRows, {
-  x:0.2, y:0.88, w:9.6, h:4.42,
+  x:0.2, y:0.88, w:9.6, h:4.18,
   border:{pt:0.5, color:C.lgray},
-  colW:[0.4, 1.7, 0.85, 0.85, 3.0, 2.8]
+  colW:[0.4, 1.7, 0.95, 0.85, 2.9, 2.7]
 });
+
+s6.addText('Tracked flights represent an ADS-B sample (~10–15% of actual European air traffic). Rankings and trends are directionally reliable; absolute counts are not total flight volumes.', {x:0.2, y:5.08, w:9.6, h:0.28, fontSize:8, italic:true, color:C.slate, fontFace:sans, align:'center'});
 
 // ── SLIDE 7: Route Spotlight ──────────────────────────────────────────────────
 const s7 = pptx.addSlide();
 s7.background = {color:C.navy};
-header(s7, 'Route Spotlight', today);
+header(s7, 'Route Spotlight (Tracked Sample)', today);
 
 // Longest
 card(s7, 0.3, 0.95, 9.4, 2.05, C.blue);
-s7.addText('LONGEST ROUTE OF THE DAY', {x:0.55, y:1.05, w:8.8, h:0.35, fontSize:10, color:C.accent, fontFace:sans, charSpacing:2, bold:true});
+s7.addText('LONGEST TRACKED ROUTE OF THE DAY', {x:0.55, y:1.05, w:8.8, h:0.35, fontSize:10, color:C.accent, fontFace:sans, charSpacing:2, bold:true});
 s7.addText(fd.longestFlight.route, {x:0.55, y:1.42, w:8.8, h:0.75, fontSize:34, bold:true, color:C.white, fontFace:serif});
-s7.addText(`${fd.longestFlight.airline}   ·   ${fd.longestFlight.hours} hours in the air`, {x:0.55, y:2.18, w:8.8, h:0.35, fontSize:13, color:C.ice, fontFace:sans});
+s7.addText(`${fd.longestFlight.airline}   ·   ${fd.longestFlight.hours} hours in the air (ADS-B estimate)`, {x:0.55, y:2.18, w:8.8, h:0.35, fontSize:13, color:C.ice, fontFace:sans});
 
 // Shortest
 card(s7, 0.3, 3.2, 9.4, 2.05, C.mid);
-s7.addText('SHORTEST ROUTE OF THE DAY', {x:0.55, y:3.3, w:8.8, h:0.35, fontSize:10, color:C.navy, fontFace:sans, charSpacing:2, bold:true});
+s7.addText('SHORTEST TRACKED ROUTE OF THE DAY', {x:0.55, y:3.3, w:8.8, h:0.35, fontSize:10, color:C.navy, fontFace:sans, charSpacing:2, bold:true});
 s7.addText(fd.shortestFlight.route, {x:0.55, y:3.67, w:8.8, h:0.75, fontSize:34, bold:true, color:C.white, fontFace:serif});
-s7.addText(`${fd.shortestFlight.airline}   ·   ${fd.shortestFlight.hours} hours in the air`, {x:0.55, y:4.43, w:8.8, h:0.35, fontSize:13, color:C.white, fontFace:sans});
+s7.addText(`${fd.shortestFlight.airline}   ·   ${fd.shortestFlight.hours} hours in the air (ADS-B estimate)`, {x:0.55, y:4.43, w:8.8, h:0.35, fontSize:13, color:C.white, fontFace:sans});
 
 // ── SLIDE 8: Airline Profiles (top 5 cards) ───────────────────────────────────
 const s8 = pptx.addSlide();
 s8.background = {color:C.offW};
-header(s8, 'Top 5 Airline Profiles', today);
+header(s8, 'Top 5 Airline Profiles (Tracked Sample)', today);
 
 fd.top10Airlines.slice(0,5).forEach((a, i) => {
   const x = 0.2 + (i % 5) * 1.94;
@@ -191,12 +193,12 @@ fd.top10Airlines.slice(0,5).forEach((a, i) => {
   // Airline name
   s8.addText(a.airline, {x:x+0.08, y:1.68, w:1.66, h:0.55, fontSize:11, bold:true, color: isFirst ? C.white : C.navy, fontFace:serif, align:'center', wrap:true});
   // Stats
-  s8.addText('Flights', {x:x+0.08, y:2.35, w:1.66, h:0.25, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
+  s8.addText('Tracked Flights', {x:x+0.08, y:2.35, w:1.66, h:0.25, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
   s8.addText(Number(a.flightCount).toLocaleString(), {x:x+0.08, y:2.6, w:1.66, h:0.45, fontSize:22, bold:true, color: isFirst ? C.accent : C.mid, fontFace:serif, align:'center'});
   s8.addText('Block Hours', {x:x+0.08, y:3.1, w:1.66, h:0.25, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
   s8.addText(Number(a.totalFlightHours).toLocaleString()+'h', {x:x+0.08, y:3.35, w:1.66, h:0.4, fontSize:17, bold:true, color: isFirst ? C.white : C.text, fontFace:serif, align:'center'});
   s8.addText(a.longestRoute, {x:x+0.08, y:3.85, w:1.66, h:0.3, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
-  s8.addText('top route', {x:x+0.08, y:4.15, w:1.66, h:0.22, fontSize:8, color: isFirst ? C.accent : C.mid, fontFace:sans, align:'center'});
+  s8.addText('top tracked route', {x:x+0.08, y:4.15, w:1.66, h:0.22, fontSize:8, color: isFirst ? C.accent : C.mid, fontFace:sans, align:'center'});
 });
 
 // ── SLIDE 9: Summary / Back Cover ────────────────────────────────────────────
@@ -212,10 +214,10 @@ s9.addText(dayName, {x:0.25, y:1.35, w:3.5, h:0.35, fontSize:10, color:C.ice, fo
 const summaryItems = [
   ['Flights tracked', Number(fd.totalFlights24h).toLocaleString()],
   ['Total block hours', Number(fd.totalFlightHours24h).toLocaleString()+'h'],
-  ['#1 airline', fd.top10Airlines[0].airline],
-  ['#1 flights', Number(fd.top10Airlines[0].flightCount).toLocaleString()],
-  ['Longest route', fd.longestFlight.route+' ('+fd.longestFlight.hours+'h)'],
-  ['Shortest route', fd.shortestFlight.route+' ('+fd.shortestFlight.hours+'h)'],
+  ['#1 by activity', fd.top10Airlines[0].airline],
+  ['#1 tracked flights', Number(fd.top10Airlines[0].flightCount).toLocaleString()],
+  ['Longest tracked route', fd.longestFlight.route+' ('+fd.longestFlight.hours+'h)'],
+  ['Shortest tracked route', fd.shortestFlight.route+' ('+fd.shortestFlight.hours+'h)'],
 ];
 
 summaryItems.forEach(([label, val], i) => {
@@ -225,8 +227,8 @@ summaryItems.forEach(([label, val], i) => {
 });
 
 // Right side — big closing statement
-s9.addText('European\nAirlines\nIntelligence', {x:4.3, y:1.2, w:5.4, h:2.4, fontSize:38, bold:true, color:C.white, fontFace:serif, lineSpacingMultiple:1.3});
-s9.addText('Daily briefing powered by OpenSky Network ADS-B data.\nCovering top European carriers by operational volume.', {x:4.3, y:3.8, w:5.4, h:0.8, fontSize:12, color:C.ice, fontFace:sans, lineSpacingMultiple:1.4});
+s9.addText('European\nAirlines\nActivity', {x:4.3, y:1.2, w:5.4, h:2.4, fontSize:38, bold:true, color:C.white, fontFace:serif, lineSpacingMultiple:1.3});
+s9.addText('Daily briefing based on an ADS-B sample of European flight activity (OpenSky Network, ~10-15% of actual traffic). Figures support relative ranking and trend analysis, not total flight volumes.', {x:4.3, y:3.8, w:5.4, h:0.9, fontSize:11, color:C.ice, fontFace:sans, lineSpacingMultiple:1.3});
 s9.addShape(pptx.shapes.RECTANGLE, {x:4.3, y:4.75, w:5.4, h:0.06, fill:{color:C.accent}});
 s9.addText('EuroAir Intel · Generated daily at 10:00 Vilnius Time', {x:4.3, y:4.85, w:5.4, h:0.3, fontSize:10, color:C.slate, fontFace:sans});
 
