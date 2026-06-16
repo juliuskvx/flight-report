@@ -50,7 +50,6 @@ def get_access_token():
     print(f"  [auth] token response received")
 
     token = data["access_token"]
-    # expires_in is typically 1800s (30 min); refresh after 20 min to be safe
     expires_in = data.get("expires_in", 1800)
     _token_cache["access_token"] = token
     _token_cache["expires_at"] = now + min(expires_in - 300, expires_in * 0.66)
@@ -79,39 +78,109 @@ AIRLINE_CALLSIGNS = {
 }
 
 ICAO_TO_IATA = {
+    # UK & Ireland
     "EGLL":"LHR","EGSS":"STN","EGGW":"LTN","EGKK":"LGW","EGCC":"MAN","EGGP":"LPL",
     "EGBB":"BHX","EGPH":"EDI","EGPF":"GLA","EGNX":"EMA","EGTE":"EXT","EGHI":"SOU",
     "EIDW":"DUB","EINN":"SNN","EICK":"ORK",
+    # France
     "LFPG":"CDG","LFPO":"ORY","LFML":"MRS","LFMN":"NCE","LFLY":"LYS","LFBD":"BOD",
-    "LFRS":"NTE","LFTW":"MPL","LFBZ":"BIQ","LFBT":"LDE",
+    "LFRS":"NTE","LFTW":"MPL","LFBZ":"BIQ","LFBT":"LDE","LFLL":"LYS","LFMO":"AVN",
+    "LFMK":"CCF","LFMT":"MPL","LFSB":"BSL","LFST":"SXB","LFPB":"LBG",
+    # Germany
     "EDDF":"FRA","EDDM":"MUC","EDDB":"BER","EDDH":"HAM","EDDK":"CGN","EDDL":"DUS",
-    "EDDS":"STR","EDDG":"FMO","EDDN":"NUE",
-    "EHAM":"AMS","EHRD":"RTM",
+    "EDDS":"STR","EDDG":"FMO","EDDN":"NUE","EDDT":"TXL","EDDP":"LEJ","EDDC":"DRS",
+    "EDDF":"FRA","EDJA":"FDH","EDDV":"HAJ","ETSI":"IGS",
+    # Netherlands
+    "EHAM":"AMS","EHRD":"RTM","EHEH":"EIN",
+    # Spain
     "LEMD":"MAD","LEBL":"BCN","LEPA":"PMI","LEAL":"ALC","LEMG":"AGP","LEBB":"BIO",
     "LEVC":"VLC","LEZL":"SVQ","LEGE":"GRO","LERJ":"REU","LEGR":"GRX","LEIB":"IBZ",
+    "LERS":"RUS","LEMH":"MAH","LELN":"LEN","LESO":"EAS","LEAM":"LEI",
+    # Canary Islands
     "GCLP":"LPA","GCFV":"FUE","GCTS":"TFS","GCXO":"TFN","GCRR":"ACE","GCLA":"SPC",
+    "GCGM":"GMZ","GCHI":"VDE",
+    # Italy
     "LIRF":"FCO","LIMC":"MXP","LIME":"BGY","LIRA":"CIA","LIPZ":"VCE","LIRN":"NAP",
-    "LICC":"CTA","LICJ":"PMO","LIBD":"BRI","LIBF":"FOG",
-    "LOWW":"VIE","LOWI":"INN","LOWG":"GRZ","LOWS":"SZG",
-    "LKPR":"PRG",
-    "EPWA":"WAW","EPKK":"KRK","EPGD":"GDN","EPWR":"WRO","EPKT":"KTW",
-    "LHBP":"BUD",
-    "LROP":"OTP","LRCL":"CLJ",
-    "LBSF":"SOF",
-    "LDZA":"ZAG","LDSP":"SPU","LDDU":"DBV",
-    "LYBT":"BEG","LWSK":"SKP",
+    "LICC":"CTA","LICJ":"PMO","LIBD":"BRI","LIBF":"FOG","LIML":"LIN","LIPX":"VRN",
+    "LIPT":"TSF","LIPE":"BLQ","LIPU":"PMF","LIRZ":"PEG","LICT":"TPS","LICB":"CIY",
+    "LIDR":"RAN","LIPQ":"TRS","LICA":"SUF","LICG":"PNL",
+    # Austria
+    "LOWW":"VIE","LOWI":"INN","LOWG":"GRZ","LOWS":"SZG","LOWK":"KLU","LOXZ":"ZRS",
+    # Czech Republic
+    "LKPR":"PRG","LKTB":"BRQ","LKMT":"OSR",
+    # Poland
+    "EPWA":"WAW","EPKK":"KRK","EPGD":"GDN","EPWR":"WRO","EPKT":"KTW","EPPO":"POZ",
+    "EPRZ":"RZE","EPBY":"BZG","EPLL":"LCJ","EPSC":"SZZ","EPLU":"LUZ",
+    # Hungary
+    "LHBP":"BUD","LHDC":"DEB",
+    # Romania
+    "LROP":"OTP","LRCL":"CLJ","LRTM":"TGM","LRSB":"SBZ","LRIA":"IAS","LRCK":"CND",
+    # Bulgaria
+    "LBSF":"SOF","LBPD":"PDV","LBWN":"VAR","LBBG":"BOJ",
+    # Croatia
+    "LDZA":"ZAG","LDSP":"SPU","LDDU":"DBV","LDPL":"PUY","LDZD":"ZAD",
+    # Serbia & North Macedonia
+    "LYBT":"BEG","LWSK":"SKP","BKPR":"PRN",
+    # Turkey — comprehensive
     "LTFM":"IST","LTAI":"AYT","LTBJ":"ADB","LTAC":"ESB","LTBA":"SAW",
-    "LTFE":"BJV","LTBS":"DLM","LTCG":"TZX",
-    "EVRA":"RIX","EYVI":"VNO","EETN":"TLL",
-    "EFHK":"HEL","ENGM":"OSL","EKCH":"CPH","ESSA":"ARN","ESGG":"GOT",
-    "EBBR":"BRU","EBCI":"CRL","ELLX":"LUX",
-    "LSGG":"GVA","LSZH":"ZRH",
-    "LPPT":"LIS","LPPR":"OPO","LPFR":"FAO",
+    "LTFE":"BJV","LTBS":"DLM","LTCG":"TZX","LTAG":"ADA","LTAN":"KYA",
+    "LTAU":"VAS","LTAW":"TZX","LTAZ":"NEV","LTBF":"BAL","LTBH":"CKZ",
+    "LTBL":"ADB","LTBO":"USQ","LTBQ":"KCO","LTBR":"BTC","LTBU":"TEQ",
+    "LTBV":"OGU","LTBY":"ANK","LTCA":"EZS","LTCB":"OGU","LTCC":"DIY",
+    "LTCD":"IGD","LTCE":"ERZ","LTCF":"KSY","LTCG":"TZX","LTCH":"SFQ",
+    "LTCI":"KFS","LTCJ":"POS","LTCK":"MSR","LTCL":"SXZ","LTCM":"SIC",
+    "LTCN":"KCM","LTCO":"VAN","LTCP":"GNY","LTCR":"AJI","LTCS":"CKS",
+    "LTDA":"HTY","LTDB":"ISE","LTDC":"KYA","LTFE":"BJV",
+    # Baltic states
+    "EVRA":"RIX","EYVI":"VNO","EETN":"TLL","EVLA":"LPX","EVPA":"PNV",
+    # Scandinavia & Finland
+    "EFHK":"HEL","EFTU":"TKU","EFTP":"TMP","EFOU":"OUL","EFIV":"IVL",
+    "ENGM":"OSL","ENBO":"BOO","ENBR":"BGO","ENKR":"KKN","ENVA":"TRD",
+    "EKCH":"CPH","EKBI":"BLL","EKYT":"AAL","EKOD":"ODE","EKRN":"RNN",
+    "ESSA":"ARN","ESGG":"GOT","ESMS":"MMX","ESNU":"UME","ESPE":"KRF",
+    # Belgium & Luxembourg
+    "EBBR":"BRU","EBCI":"CRL","ELLX":"LUX","EBAW":"ANR","EBLG":"LGG",
+    # Switzerland
+    "LSGG":"GVA","LSZH":"ZRH","LSZA":"LUG","LSZB":"BRN",
+    # Portugal
+    "LPPT":"LIS","LPPR":"OPO","LPFR":"FAO","LPPD":"PDL","LPLA":"TER",
+    "LPMA":"FNC","LPFL":"FLW","LPGR":"GRW","LPHR":"HOR","LPPD":"PDL",
+    # Greece
     "LGAV":"ATH","LGTS":"SKG","LGIR":"HER","LGRP":"RHO","LGKF":"EFL","LGZA":"ZTH",
+    "LGKR":"CFU","LGKO":"KGS","LGHI":"JKH","LGMY":"MJT","LGKL":"KLX","LGPZ":"PVK",
+    "LGAX":"AXD","LGIO":"IOA","LGKC":"KIT","LGKP":"AOK","LGLM":"LXS","LGMT":"MYK",
+    "LGNX":"JNX","LGPA":"JPA","LGPL":"PPK","LGSM":"SMI","LGSO":"JSY","LGSP":"SPJ",
+    "LGSR":"JTR","LGST":"JSH","LGTL":"SOH","LGTP":"KZI","LGTS":"SKG",
+    # Cyprus, Israel, Iceland, Malta
     "LCLK":"LCA","LCPH":"PFO","LLBG":"TLV","BIKF":"KEF","LMML":"MLA",
-    "HECA":"CAI","DTMB":"MIR","DTTJ":"DJE","DTTZ":"TUN",
+    # North Africa
+    "HECA":"CAI","DTMB":"MIR","DTTJ":"DJE","DTTZ":"TUN","DTTA":"TUN",
     "GMME":"RBA","GMMN":"CMN","GMAD":"AGA","DAAG":"ALG","DAOO":"ORN",
+    "DAAB":"QSF","DAAS":"ABN","DABB":"AAE","DABS":"TMR","DAFH":"HME",
+    # Jordan, Lebanon, Egypt extras
+    "OJAI":"AMM","OLBA":"BEY","HESH":"SSH","HESN":"ASW",
 }
+
+# Routes to exclude from spotlight (same-metro / trivial pairs)
+SAME_METRO_PAIRS = {
+    frozenset({"AMS", "RTM"}),
+    frozenset({"IST", "SAW"}),
+    frozenset({"CDG", "ORY"}),
+    frozenset({"BGY", "MXP"}),
+    frozenset({"CIA", "FCO"}),
+    frozenset({"LTN", "LHR"}),
+    frozenset({"LTN", "LGW"}),
+    frozenset({"STN", "LHR"}),
+    frozenset({"STN", "LGW"}),
+    frozenset({"CRL", "BRU"}),
+    frozenset({"TSF", "VCE"}),
+    frozenset({"LIN", "MXP"}),
+    frozenset({"GOT", "ARN"}),  # close but distinct
+}
+
+# Max credible duration for European / intra-continental flights
+MAX_FLIGHT_HOURS = 6.0
+MIN_FLIGHT_HOURS = 0.25  # below this is noise or taxi-only
 
 def is_valid_iata(code):
     return code and len(code) == 3 and code.isalpha() and code.isupper()
@@ -126,7 +195,10 @@ def get_airline(callsign):
         return None
     return AIRLINE_CALLSIGNS.get(callsign.strip()[:3].upper())
 
-def api_get(path, params=None, timeout=20, retries=2, backoff=None):
+def is_same_metro(dep, arr):
+    return frozenset({dep, arr}) in SAME_METRO_PAIRS
+
+def api_get(path, params=None, timeout=60, retries=3, backoff=None):
     if backoff is None:
         backoff = int(os.environ.get("DEBUG_BACKOFF", "15"))
     url = f"{BASE_URL}{path}"
@@ -140,7 +212,6 @@ def api_get(path, params=None, timeout=20, retries=2, backoff=None):
             with urllib.request.urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode())
         except urllib.error.HTTPError as e:
-            # If we get a 401/403 with OAuth2, force a fresh token on retry
             if e.code in (401, 403) and OPENSKY_CLIENT_ID:
                 _token_cache["access_token"] = None
             if attempt < retries:
@@ -184,7 +255,7 @@ def main():
             else:
                 print(f"  {label}: 0 flights (empty response)")
         except Exception as e:
-            print(f"  {label}: FAILED after 3 attempts — {e}")
+            print(f"  {label}: FAILED after {3} attempts — {e}")
             failed_windows += 1
         t = t_end
         windows_done += 1
@@ -218,10 +289,11 @@ def main():
         exit(1)
 
     top10 = []
-    all_route_durations = []
+    all_route_durations = []  # for global longest/shortest spotlight
 
     for rank, (name, flights) in enumerate(sorted_airlines, 1):
         routes_with_dur = []
+        route_counts = defaultdict(int)  # for most-frequent route
         total_dur = 0
         dur_count = 0
 
@@ -234,20 +306,35 @@ def main():
             dur = None
             if t_dep and t_arr:
                 raw_dur = (t_arr - t_dep) / 3600
-                if 0.3 < raw_dur < 16:
+                # FIX 1: Cap at MAX_FLIGHT_HOURS to filter lastSeen noise
+                if MIN_FLIGHT_HOURS < raw_dur <= MAX_FLIGHT_HOURS:
                     dur = round(raw_dur, 1)
                     total_dur += dur
                     dur_count += 1
 
             if dep and arr and dep != arr and is_valid_iata(dep) and is_valid_iata(arr):
-                routes_with_dur.append((dur or 2.0, dep, arr))
-                if dur:
+                # FIX 2: Track route frequency for "most frequent route"
+                route_key = f"{dep} → {arr}"
+                route_counts[route_key] += 1
+
+                # Only include routes with valid duration in the duration list
+                if dur and not is_same_metro(dep, arr):
+                    routes_with_dur.append((dur, dep, arr))
                     all_route_durations.append((dur, dep, arr, name))
 
         total_hours = round(total_dur, 1) if dur_count > 0 else round(len(flights) * 2.0, 1)
+
+        # Longest / shortest from valid duration routes (same-metro already excluded)
         routes_with_dur.sort(key=lambda x: x[0], reverse=True)
-        longest  = f"{routes_with_dur[0][1]} → {routes_with_dur[0][2]} ({routes_with_dur[0][0]:.1f}h)" if routes_with_dur else "N/A"
+        longest  = f"{routes_with_dur[0][1]} → {routes_with_dur[0][2]} ({routes_with_dur[0][0]:.1f}h)"  if routes_with_dur else "N/A"
         shortest = f"{routes_with_dur[-1][1]} → {routes_with_dur[-1][2]} ({routes_with_dur[-1][0]:.1f}h)" if routes_with_dur else "N/A"
+
+        # FIX 3: Most frequent route per airline
+        if route_counts:
+            top_route, top_count = max(route_counts.items(), key=lambda x: x[1])
+            top_route_display = f"{top_route} ({top_count}x)"
+        else:
+            top_route_display = "N/A"
 
         top10.append({
             "rank": rank,
@@ -256,16 +343,26 @@ def main():
             "totalFlightHours": total_hours,
             "longestRoute": longest,
             "shortestRoute": shortest,
+            "topRoute": top_route_display,  # NEW: most frequent route
         })
 
+    # Global spotlight: exclude same-metro pairs AND routes below minimum duration
     all_route_durations.sort(key=lambda x: x[0], reverse=True)
-    if all_route_durations:
-        lng = all_route_durations[0]
-        sht = all_route_durations[-1]
+
+    # FIX 4: Filter spotlight for same-metro and very short routes
+    valid_long  = [(d,dep,arr,a) for d,dep,arr,a in all_route_durations if not is_same_metro(dep,arr)]
+    valid_short = [(d,dep,arr,a) for d,dep,arr,a in reversed(all_route_durations) if not is_same_metro(dep,arr) and d >= MIN_FLIGHT_HOURS]
+
+    if valid_long:
+        lng = valid_long[0]
         longest_flight  = {"airline": lng[3], "route": f"{lng[1]} → {lng[2]}", "hours": lng[0]}
-        shortest_flight = {"airline": sht[3], "route": f"{sht[1]} → {sht[2]}", "hours": sht[0]}
     else:
         longest_flight  = {"airline": "N/A", "route": "N/A", "hours": 0}
+
+    if valid_short:
+        sht = valid_short[0]
+        shortest_flight = {"airline": sht[3], "route": f"{sht[1]} → {sht[2]}", "hours": sht[0]}
+    else:
         shortest_flight = {"airline": "N/A", "route": "N/A", "hours": 0}
 
     total_flights = sum(a["flightCount"] for a in top10)
