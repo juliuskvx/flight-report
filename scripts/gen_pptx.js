@@ -197,8 +197,8 @@ fd.top10Airlines.slice(0,5).forEach((a, i) => {
   s8.addText(Number(a.flightCount).toLocaleString(), {x:x+0.08, y:2.6, w:1.66, h:0.45, fontSize:22, bold:true, color: isFirst ? C.accent : C.mid, fontFace:serif, align:'center'});
   s8.addText('Block Hours', {x:x+0.08, y:3.1, w:1.66, h:0.25, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
   s8.addText(Number(a.totalFlightHours).toLocaleString()+'h', {x:x+0.08, y:3.35, w:1.66, h:0.4, fontSize:17, bold:true, color: isFirst ? C.white : C.text, fontFace:serif, align:'center'});
-  s8.addText(a.longestRoute, {x:x+0.08, y:3.85, w:1.66, h:0.3, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
-  s8.addText('top tracked route', {x:x+0.08, y:4.15, w:1.66, h:0.22, fontSize:8, color: isFirst ? C.accent : C.mid, fontFace:sans, align:'center'});
+  s8.addText(a.topRoute || a.longestRoute, {x:x+0.08, y:3.85, w:1.66, h:0.3, fontSize:9, color: isFirst ? C.ice : C.slate, fontFace:sans, align:'center'});
+  s8.addText('most frequent route', {x:x+0.08, y:4.15, w:1.66, h:0.22, fontSize:8, color: isFirst ? C.accent : C.mid, fontFace:sans, align:'center'});
 });
 
 // ── SLIDE 9: Summary / Back Cover ────────────────────────────────────────────
