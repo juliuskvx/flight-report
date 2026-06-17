@@ -45,7 +45,7 @@ def get_access_token():
     )
 
     print(f"  [auth] requesting token from {TOKEN_URL} ...")
-    with urllib.request.urlopen(req, timeout=20) as resp:
+    with urllib.request.urlopen(req, timeout=10) as resp:
         data = json.loads(resp.read().decode())
     print(f"  [auth] token response received")
 
@@ -58,13 +58,17 @@ def get_access_token():
 
 def get_auth_header():
     """Return the auth header dict, preferring OAuth2 if configured,
-    falling back to Basic Auth otherwise."""
+    falling back to Basic Auth if OAuth2 token endpoint is unreachable."""
     if OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET:
-        token = get_access_token()
-        return {"Authorization": f"Bearer {token}", "User-Agent": "flight-report/1.0"}
-    else:
-        credentials = base64.b64encode(f"{OPENSKY_USER}:{OPENSKY_PASS}".encode()).decode()
-        return {"Authorization": f"Basic {credentials}", "User-Agent": "flight-report/1.0"}
+        try:
+            token = get_access_token()
+            return {"Authorization": f"Bearer {token}", "User-Agent": "flight-report/1.0"}
+        except Exception as e:
+            print(f"  [auth] OAuth2 failed ({e}), falling back to Basic Auth")
+            _token_cache["access_token"] = None
+    credentials = base64.b64encode(f"{OPENSKY_USER}:{OPENSKY_PASS}".encode()).decode()
+    print("  [auth] using Basic Auth")
+    return {"Authorization": f"Basic {credentials}", "User-Agent": "flight-report/1.0"}
 
 AIRLINE_CALLSIGNS = {
     "RYR": "Ryanair", "EZY": "easyJet", "DLH": "Lufthansa",
@@ -204,9 +208,9 @@ def api_get(path, params=None, timeout=60, retries=3, backoff=None):
     url = f"{BASE_URL}{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
+    headers = get_auth_header()  # fetch once; only re-fetch on 401/403
     for attempt in range(1, retries + 1):
         try:
-            headers = get_auth_header()
             print(f"    [api] requesting {url} ...")
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=timeout) as resp:
@@ -214,6 +218,7 @@ def api_get(path, params=None, timeout=60, retries=3, backoff=None):
         except urllib.error.HTTPError as e:
             if e.code in (401, 403) and OPENSKY_CLIENT_ID:
                 _token_cache["access_token"] = None
+                headers = get_auth_header()  # re-fetch only on auth failure
             if attempt < retries:
                 print(f"    Attempt {attempt} failed: HTTP Error {e.code}: {e.reason} — retrying in {backoff}s...")
                 time.sleep(backoff)
