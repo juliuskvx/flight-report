@@ -1,7 +1,5 @@
 name: European Airlines Daily Report
 on:
-  schedule:
-    - cron: '0 7 * * *'
   workflow_dispatch:
 jobs:
   generate-report:
